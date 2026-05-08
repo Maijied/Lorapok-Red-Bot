@@ -1,0 +1,13 @@
+praw
+openai
+python-dotenv
+fastapi
+uvicorn
+sqlalchemy
+psycopg2-binary
+redis
+httpx
+apscheduler
+pydantic
+pytest
+ruff
