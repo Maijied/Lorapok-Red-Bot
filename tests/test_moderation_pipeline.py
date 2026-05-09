@@ -56,22 +56,39 @@ def test_help_comment_allowed():
     assert decision.action == "allow"
 
 
-def test_process_comment_records_decision(db):
+def test_process_comment_records_decision(db, monkeypatch):
     pytest.importorskip("litellm")
     from app.main import process_comment
 
+    # Provide a dummy API key so litellm doesn't raise before the network call
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test-dummy")
+
     settings = _make_settings()
     comment = FakeComment("Normal developer question about Python")
+
+    # Mock classify_text so no real LLM call is made
+    import app.moderation.classifier as clf
+    monkeypatch.setattr(
+        clf, "classify_text",
+        lambda text, model=None: {"action": "allow", "reason": "mocked", "confidence": 0.9},
+    )
+
     process_comment(db, comment, settings)
 
     cases = recent_cases(db, limit=10, tenant_id="default")
     assert len(cases) >= 1
 
 
-def test_dry_run_does_not_call_reddit_api(db):
+def test_dry_run_does_not_call_reddit_api(db, monkeypatch):
     """In dry_run mode, no Reddit API calls should be made."""
     pytest.importorskip("litellm")
+    import app.moderation.classifier as clf  # noqa: I001
     from app.main import process_comment
+
+    monkeypatch.setattr(
+        clf, "classify_text",
+        lambda text, model=None: {"action": "remove", "reason": "mocked", "confidence": 0.95},
+    )
 
     settings = _make_settings(dry_run=True)
     api_called = []

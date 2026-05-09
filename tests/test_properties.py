@@ -290,8 +290,9 @@ def test_scheduled_post_publish_idempotent():
     from sqlalchemy.orm import sessionmaker
 
     import app.dashboard.models  # noqa: F401
+    from app.dashboard.models import ScheduledPost
     from app.database import Base
-    from app.posting.content_calendar import publish_due_posts, schedule_post
+    from app.posting.content_calendar import publish_due_posts
 
     engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
     Base.metadata.create_all(bind=engine)
@@ -300,6 +301,7 @@ def test_scheduled_post_publish_idempotent():
     class FakeReddit:
         def subreddit(self, name):
             return self
+
         def submit(self, title, selftext):
             class S:
                 id = "xyz"
@@ -310,11 +312,22 @@ def test_scheduled_post_publish_idempotent():
         dry_run = False
 
     try:
+        # Insert a due post directly — bypasses the future-only guard
         past = datetime.now(timezone.utc) - timedelta(minutes=5)
-        schedule_post(db, "python", "Idempotent Post", "body", past)
+        post = ScheduledPost(
+            tenant_id="default",
+            subreddit_name="python",
+            title="Idempotent Post",
+            body="body",
+            post_at=past,
+            status="scheduled",
+        )
+        db.add(post)
+        db.commit()
+
         p1 = publish_due_posts(FakeReddit(), db, FakeSettings())
         p2 = publish_due_posts(FakeReddit(), db, FakeSettings())
         assert p1 == 1
-        assert p2 == 0
+        assert p2 == 0  # idempotent — already published
     finally:
         db.close()
