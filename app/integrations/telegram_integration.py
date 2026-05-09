@@ -50,7 +50,10 @@ def handle_telegram_command(
     if command == "queue":
         from app.moderation.queue import list_queue
 
-        cases = list_queue(db, status="pending", tenant_id=getattr(settings, "tenant_id", "default"))
+        cases = list_queue(
+            db, status="pending",
+            tenant_id=getattr(settings, "tenant_id", "default"),
+        )
         reply = f"*{len(cases)} pending case(s)*" if cases else "✅ Queue is empty."
         send_telegram_message(chat_id, reply)
 

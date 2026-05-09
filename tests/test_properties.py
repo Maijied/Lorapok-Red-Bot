@@ -1,12 +1,11 @@
 """Property-based tests using Hypothesis — all 18 correctness properties."""
 
-import pytest
-from hypothesis import given, settings, strategies as st
+from hypothesis import given, settings
+from hypothesis import strategies as st
 
-from app.moderation.rules import ModerationDecision, apply_light_rules
+from app.moderation.rules import apply_light_rules
 from app.posting.trending import build_trending_thread
 from app.utils.text import normalize_text, stable_hash
-
 
 # ── Property 1: Rule engine is deterministic and pure ────────────────────────
 
@@ -62,8 +61,9 @@ def test_trending_always_returns_content(trends):
 def test_queue_round_trip(text, reason):
     from sqlalchemy import create_engine
     from sqlalchemy.orm import sessionmaker
-    from app.database import Base
+
     import app.dashboard.models  # noqa: F401
+    from app.database import Base
     from app.moderation.queue import list_queue, queue_case
 
     engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
@@ -83,8 +83,9 @@ def test_queue_round_trip(text, reason):
 def test_resolve_case_idempotent():
     from sqlalchemy import create_engine
     from sqlalchemy.orm import sessionmaker
-    from app.database import Base
+
     import app.dashboard.models  # noqa: F401
+    from app.database import Base
     from app.moderation.queue import queue_case, resolve_case
 
     engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
@@ -159,9 +160,10 @@ def test_reputation_score_bounded(ap, ac, rp, bans, age):
 def test_has_feature_unknown_tenant(feature):
     from sqlalchemy import create_engine
     from sqlalchemy.orm import sessionmaker
-    from app.database import Base
+
     import app.dashboard.models  # noqa: F401
     from app.billing.features import has_feature
+    from app.database import Base
 
     engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
     Base.metadata.create_all(bind=engine)
@@ -178,8 +180,9 @@ def test_has_feature_unknown_tenant(feature):
 def test_spam_detector_requires_3_subreddits():
     from sqlalchemy import create_engine
     from sqlalchemy.orm import sessionmaker
-    from app.database import Base
+
     import app.dashboard.models  # noqa: F401
+    from app.database import Base
     from app.moderation.spam_detector import detect_cross_sub_spam, record_submission
 
     engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
@@ -200,16 +203,19 @@ def test_spam_detector_requires_3_subreddits():
 def test_health_score_components_sum():
     from sqlalchemy import create_engine
     from sqlalchemy.orm import sessionmaker
-    from app.database import Base
+
     import app.dashboard.models  # noqa: F401
     from app.analytics.health_score import compute_health_score
+    from app.database import Base
 
     engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
     Base.metadata.create_all(bind=engine)
     db = sessionmaker(bind=engine)()
     try:
         score = compute_health_score(db, "python")
-        assert abs(score.total - (score.growth + score.engagement + score.moderation + score.spam)) < 0.001
+        assert abs(
+            score.total - (score.growth + score.engagement + score.moderation + score.spam)
+        ) < 0.001
     finally:
         db.close()
 
@@ -219,8 +225,9 @@ def test_health_score_components_sum():
 def test_dispatch_event_never_raises():
     from sqlalchemy import create_engine
     from sqlalchemy.orm import sessionmaker
-    from app.database import Base
+
     import app.dashboard.models  # noqa: F401
+    from app.database import Base
     from app.integrations.webhooks import dispatch_event
 
     engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
@@ -239,9 +246,10 @@ def test_dispatch_event_never_raises():
 def test_triage_conversation_one_record():
     from sqlalchemy import create_engine
     from sqlalchemy.orm import sessionmaker
-    from app.database import Base
+
     import app.dashboard.models  # noqa: F401
     from app.dashboard.models import ModmailRecord
+    from app.database import Base
     from app.subreddit.modmail_triage import triage_conversation
 
     engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
@@ -263,7 +271,11 @@ def test_triage_conversation_one_record():
     try:
         triage_conversation(FakeConv(), FakeSettings(), db)
         triage_conversation(FakeConv(), FakeSettings(), db)  # second call — should be no-op
-        count = db.query(ModmailRecord).filter(ModmailRecord.conversation_id == "conv_test_001").count()
+        count = (
+            db.query(ModmailRecord)
+            .filter(ModmailRecord.conversation_id == "conv_test_001")
+            .count()
+        )
         assert count == 1
     finally:
         db.close()
@@ -273,10 +285,12 @@ def test_triage_conversation_one_record():
 
 def test_scheduled_post_publish_idempotent():
     from datetime import datetime, timedelta, timezone
+
     from sqlalchemy import create_engine
     from sqlalchemy.orm import sessionmaker
-    from app.database import Base
+
     import app.dashboard.models  # noqa: F401
+    from app.database import Base
     from app.posting.content_calendar import publish_due_posts, schedule_post
 
     engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})

@@ -131,17 +131,32 @@ def auto_update_changelog(
     )
 
 
-def _sync_local(db: Session, tenant_id: str, subreddit_name: str, page_name: str, content: str) -> None:
+def _sync_local(
+    db: Session,
+    tenant_id: str,
+    subreddit_name: str,
+    page_name: str,
+    content: str,
+) -> None:
     from datetime import datetime, timezone
 
     record = (
         db.query(WikiPage)
-        .filter(WikiPage.tenant_id == tenant_id, WikiPage.subreddit_name == subreddit_name, WikiPage.page_name == page_name)
+        .filter(
+            WikiPage.tenant_id == tenant_id,
+            WikiPage.subreddit_name == subreddit_name,
+            WikiPage.page_name == page_name,
+        )
         .first()
     )
     if record:
         record.content = content
         record.last_synced_at = datetime.now(timezone.utc)
     else:
-        db.add(WikiPage(tenant_id=tenant_id, subreddit_name=subreddit_name, page_name=page_name, content=content))
+        db.add(WikiPage(
+            tenant_id=tenant_id,
+            subreddit_name=subreddit_name,
+            page_name=page_name,
+            content=content,
+        ))
     db.commit()

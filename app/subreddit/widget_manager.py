@@ -71,7 +71,11 @@ def add_button_widget(
         new_widget = widgets.mod.add_button_widget(
             short_name=text[:30],
             description="",
-            buttons=[{"kind": "text", "text": text, "url": url, "color": "#FF4500", "textColor": "#FFFFFF", "fillColor": "#FF4500"}],
+            buttons=[{
+                "kind": "text", "text": text, "url": url,
+                "color": "#FF4500", "textColor": "#FFFFFF",
+                "fillColor": "#FF4500",
+            }],
         )
         return new_widget.id
     except Exception as exc:

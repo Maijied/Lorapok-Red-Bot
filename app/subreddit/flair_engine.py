@@ -98,7 +98,9 @@ def run_user_flair_batch(
     )
     updated = 0
     for rep in users:
-        if auto_assign_user_flair(reddit, subreddit_name, rep.username, rep, db, tenant_id, dry_run):
+        if auto_assign_user_flair(
+            reddit, subreddit_name, rep.username, rep, db, tenant_id, dry_run
+        ):
             updated += 1
     log.info("User flair batch: %d updated in r/%s", updated, subreddit_name)
     return updated

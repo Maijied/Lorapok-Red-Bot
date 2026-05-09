@@ -5,7 +5,6 @@ can be filtered to a single tenant without cross-tenant data leakage.
 """
 
 from datetime import date, datetime, timezone
-from typing import Any
 
 from sqlalchemy import (
     JSON,

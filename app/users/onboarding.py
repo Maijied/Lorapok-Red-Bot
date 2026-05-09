@@ -19,7 +19,9 @@ _DEFAULT_WELCOME = (
 )
 
 
-def is_welcomed(db: Session, username: str, subreddit_name: str, tenant_id: str = "default") -> bool:
+def is_welcomed(
+    db: Session, username: str, subreddit_name: str, tenant_id: str = "default"
+) -> bool:
     return (
         db.query(OnboardingRecord)
         .filter(

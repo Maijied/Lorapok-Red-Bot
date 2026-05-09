@@ -67,7 +67,11 @@ def auto_review_appeal(
 
 
 def escalate_appeal(db: Session, appeal_id: int, reason: str, tenant_id: str = "default") -> bool:
-    appeal = db.query(BanAppeal).filter(BanAppeal.id == appeal_id, BanAppeal.tenant_id == tenant_id).first()
+    appeal = (
+        db.query(BanAppeal)
+        .filter(BanAppeal.id == appeal_id, BanAppeal.tenant_id == tenant_id)
+        .first()
+    )
     if not appeal:
         return False
     appeal.status = "escalated"
@@ -85,7 +89,11 @@ def resolve_appeal(
 ) -> bool:
     if decision not in {"approved", "rejected"}:
         return False
-    appeal = db.query(BanAppeal).filter(BanAppeal.id == appeal_id, BanAppeal.tenant_id == tenant_id).first()
+    appeal = (
+        db.query(BanAppeal)
+        .filter(BanAppeal.id == appeal_id, BanAppeal.tenant_id == tenant_id)
+        .first()
+    )
     if not appeal:
         return False
     appeal.final_decision = decision

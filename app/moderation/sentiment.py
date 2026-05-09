@@ -35,7 +35,8 @@ def analyze_sentiment(text: str, model: str | None = None) -> SentimentResult:
     ai_model = model or os.getenv("AI_MODEL", "openai/gpt-4o-mini")
     prompt = (
         "Analyse the sentiment of the following Reddit comment.\n"
-        "Return strict JSON with keys: score (float -1.0 to 1.0), label (positive/neutral/negative).\n"
+        "Return strict JSON with keys: score (float -1.0 to 1.0), "
+        "label (positive/neutral/negative).\n"
         f"Comment: {text[:500]}"
     )
 

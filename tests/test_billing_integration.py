@@ -15,14 +15,24 @@ def test_feature_gate_free_to_pro_upgrade(db):
 
 def test_webhook_dispatch_no_raise_on_unreachable(db):
     """dispatch_event must never raise even when the URL is unreachable."""
-    register_webhook(db, "default", "http://localhost:19999/unreachable", ["comment.removed"], "secret123")
+    register_webhook(
+        db, "default",
+        "http://localhost:19999/unreachable",
+        ["comment.removed"],
+        "secret123",
+    )
     # Should complete without raising
     dispatch_event(db, "default", "comment.removed", {"id": "abc", "reason": "spam"})
 
 
 def test_webhook_dispatch_only_matching_events(db):
     """Webhook registered for comment.removed should not fire on user.banned."""
-    register_webhook(db, "default", "http://localhost:19999/hook2", ["comment.removed"], "secret456")
+    register_webhook(
+        db, "default",
+        "http://localhost:19999/hook2",
+        ["comment.removed"],
+        "secret456",
+    )
     # No exception, no delivery attempt for non-matching event
     dispatch_event(db, "default", "user.banned", {"username": "spammer"})
 
@@ -36,8 +46,7 @@ def test_webhook_hmac_signature_present(db, monkeypatch):
 
         class FakeResp:
             status_code = 200
-            def is_success(self): return True
-            is_success = property(lambda self: True)
+            is_success = True
 
         return FakeResp()
 

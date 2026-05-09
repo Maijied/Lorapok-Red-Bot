@@ -100,8 +100,9 @@ def _dispatch(
     event_type: str,
     payload: dict[str, Any],
 ) -> None:
-    import httpx
     from datetime import datetime, timezone
+
+    import httpx
 
     hooks = (
         db.query(WebhookConfig)
@@ -133,7 +134,10 @@ def _dispatch(
                 if resp.is_success:
                     delivered = True
                     break
-                log.warning("Webhook %d attempt %d: HTTP %d", hook.id, attempt + 1, resp.status_code)
+                log.warning(
+                    "Webhook %d attempt %d: HTTP %d",
+                    hook.id, attempt + 1, resp.status_code,
+                )
             except Exception as exc:
                 log.warning("Webhook %d attempt %d failed: %s", hook.id, attempt + 1, exc)
             if attempt < len(_BACKOFF_SECONDS) - 1:

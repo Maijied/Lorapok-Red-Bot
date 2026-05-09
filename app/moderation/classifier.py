@@ -97,10 +97,10 @@ def _normalize_confidence(value: Any) -> float:
         return 0.0
 
 
-def _to_decision(payload: dict[str, Any]) -> "ModerationDecision":
+def _to_decision(payload: dict[str, Any]):
     """Coerce any dict (including malformed LLM output) to a ModerationDecision.
 
-    Imported here to avoid circular imports — rules.py is the canonical home.
+    Returns a ModerationDecision from app.moderation.rules.
     """
     from app.moderation.rules import ModerationDecision
 

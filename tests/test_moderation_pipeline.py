@@ -3,19 +3,17 @@
 import pytest
 
 from app.moderation.memory import recent_cases
-from app.moderation.queue import list_queue
 from app.moderation.rules import apply_light_rules
-
-# Skip pipeline tests if litellm is not installed (local dev without full deps)
-litellm_available = pytest.importorskip("litellm", reason="litellm not installed")
 
 
 def _make_settings(**kwargs):
+    from app.config import Settings
+
     defaults = dict(
         reddit_client_id="", reddit_client_secret="", reddit_username="",
         reddit_password="", reddit_user_agent="test",
-        ai_model="openai/gpt-4o-mini", openai_api_key="", anthropic_api_key="",
-        gemini_api_key="", mistral_api_key="",
+        ai_model="openai/gpt-4o-mini", openai_api_key="",
+        anthropic_api_key="", gemini_api_key="", mistral_api_key="",
         database_url="sqlite:///:memory:", redis_url="",
         discord_webhook_url="", slack_webhook_url="",
         telegram_bot_token="", telegram_chat_id="",
@@ -46,30 +44,15 @@ class FakeComment:
         pass
 
 
-def test_spam_comment_queued_in_dry_run(db):
-    pytest.importorskip("litellm")
-    from app.main import process_comment
-
-    settings = _make_settings()
-    comment = FakeComment("Buy now and get free money — visit my site!")
-    process_comment(db, comment, settings)
-
-    # In dry_run, spam should be processed (removed or queued)
-    # The rule engine should flag it
-    decision = apply_light_rules(comment.body)
+def test_spam_rule_flags_correctly():
+    """Rule engine correctly flags spam — no litellm needed."""
+    decision = apply_light_rules("Buy now and get free money — visit my site!")
     assert decision.action == "remove"
 
 
-def test_help_comment_allowed(db):
-    pytest.importorskip("litellm")
-    from app.main import process_comment
-
-    settings = _make_settings()
-    comment = FakeComment("How do I fix this error in my Python code?")
-    process_comment(db, comment, settings)
-
-    # Should be allowed (no spam terms)
-    decision = apply_light_rules(comment.body)
+def test_help_comment_allowed():
+    """Rule engine allows normal help questions."""
+    decision = apply_light_rules("How do I fix this error in my Python code?")
     assert decision.action == "allow"
 
 

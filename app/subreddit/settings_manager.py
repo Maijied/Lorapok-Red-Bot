@@ -118,7 +118,8 @@ def _fetch_policy_data(reddit: Any, subreddit_name: str, policy_types: list[str]
     sub = reddit.subreddit(subreddit_name)
     if "rules" in policy_types:
         data["rules"] = [
-            {"short_name": r.short_name, "description": r.description, "violation_reason": r.violation_reason}
+            {"short_name": r.short_name, "description": r.description,
+             "violation_reason": r.violation_reason}
             for r in sub.rules
         ]
     if "removal_reasons" in policy_types:

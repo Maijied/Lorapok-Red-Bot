@@ -97,7 +97,6 @@ def _handle_payment_failed(db: Session, data: dict) -> None:
 
 
 def _handle_payment_succeeded(db: Session, data: dict) -> None:
-    from app.billing.tenant import reset_all_ai_quotas
     from app.dashboard.models import TenantConfig
 
     customer_id = data.get("customer")

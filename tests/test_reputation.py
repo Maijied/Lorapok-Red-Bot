@@ -1,11 +1,20 @@
 """Tests for user reputation scoring."""
 
 from app.dashboard.models import UserReputation
-from app.users.reputation import compute_reputation_score, get_or_create_reputation, update_reputation, ReputationDelta
+from app.users.reputation import (
+    ReputationDelta,
+    compute_reputation_score,
+    get_or_create_reputation,
+    update_reputation,
+)
 
 
 def _make_rep(**kwargs):
-    defaults = dict(approved_posts=0, approved_comments=0, removed_posts=0, removed_comments=0, bans=0, account_age_days=1)
+    defaults = dict(
+        approved_posts=0, approved_comments=0,
+        removed_posts=0, removed_comments=0,
+        bans=0, account_age_days=1,
+    )
     defaults.update(kwargs)
     rep = UserReputation(**defaults)
     return rep

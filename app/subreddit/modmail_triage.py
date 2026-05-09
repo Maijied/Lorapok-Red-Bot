@@ -3,14 +3,13 @@
 from __future__ import annotations
 
 import logging
-import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.dashboard.models import BanAppeal, ModmailRecord, ModmailTemplate
+from app.dashboard.models import ModmailRecord, ModmailTemplate
 
 log = logging.getLogger(__name__)
 
@@ -74,7 +73,10 @@ def triage_conversation(
     text = f"{subject} {first_msg}"
     category, confidence = _classify_modmail(text)
 
-    tier = getattr(settings, "tier", None) or _get_tenant_tier(db, getattr(settings, "tenant_id", "default"))
+    tier = (
+        getattr(settings, "tier", None)
+        or _get_tenant_tier(db, getattr(settings, "tenant_id", "default"))
+    )
     sla_hours = _SLA_HOURS.get(tier)
     sla_deadline = (
         datetime.now(timezone.utc) + timedelta(hours=sla_hours) if sla_hours else None
@@ -91,7 +93,9 @@ def triage_conversation(
         conversation_id=conv_id,
         subreddit_name=subreddit_name,
         subject=subject[:255],
-        author=str(getattr(conversation, "authors", [{}])[0]) if getattr(conversation, "authors", None) else "",
+        author=str(
+            getattr(conversation, "authors", [{}])[0]
+        ) if getattr(conversation, "authors", None) else "",
         category=category,
         confidence=confidence,
         status="open",
@@ -152,7 +156,12 @@ def archive_conversation(reddit: Any, conversation_id: str) -> bool:
         return False
 
 
-def get_modmail_analytics(db: Session, subreddit_name: str, tenant_id: str = "default", days: int = 30) -> dict:
+def get_modmail_analytics(
+    db: Session,
+    subreddit_name: str,
+    tenant_id: str = "default",
+    days: int = 30,
+) -> dict:
     from datetime import datetime, timedelta, timezone
 
     since = datetime.now(timezone.utc) - timedelta(days=days)
@@ -189,13 +198,22 @@ def get_modmail_analytics(db: Session, subreddit_name: str, tenant_id: str = "de
 
 def list_modmail_templates(db: Session, tenant_id: str) -> list[dict]:
     records = db.query(ModmailTemplate).filter(ModmailTemplate.tenant_id == tenant_id).all()
-    return [{"id": r.id, "name": r.name, "category": r.category, "body": r.body, "language": r.language} for r in records]
+    return [
+        {
+            "id": r.id, "name": r.name, "category": r.category,
+            "body": r.body, "language": r.language,
+        }
+        for r in records
+    ]
 
 
 def create_modmail_template(
     db: Session, tenant_id: str, name: str, category: str, body: str, language: str = "en"
 ) -> str:
-    record = ModmailTemplate(tenant_id=tenant_id, name=name, category=category, body=body, language=language)
+    record = ModmailTemplate(
+        tenant_id=tenant_id, name=name, category=category,
+        body=body, language=language,
+    )
     db.add(record)
     db.commit()
     db.refresh(record)
@@ -244,7 +262,12 @@ def _send_auto_reply(conversation: Any, category: str, settings: Any, db: Sessio
 
 
 def _create_ban_appeal_record(
-    db: Session, conversation: Any, settings: Any, conv_id: str, subreddit_name: str, appeal_text: str
+    db: Session,
+    conversation: Any,
+    settings: Any,
+    conv_id: str,
+    subreddit_name: str,
+    appeal_text: str,
 ) -> None:
     from app.users.ban_appeals import create_ban_appeal
 

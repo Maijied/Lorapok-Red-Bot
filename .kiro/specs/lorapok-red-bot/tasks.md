@@ -110,7 +110,7 @@ All tasks are Python unless otherwise noted. Property-based tests use `hypothesi
     - Add error handler on each job: log + alert notification channels on exception
     - _Requirements: 31.1–31.5_
 
-  - [ ] 2.11 Checkpoint — ensure all existing tests pass with the refactored code
+  - [x] 2.11 Checkpoint — ensure all existing tests pass with the refactored code
     - Run `pytest tests/` and fix any regressions from Phase 1–2 changes
     - _Requirements: 1.1–1.10, 2.1–2.7_
 
@@ -301,7 +301,7 @@ All tasks are Python unless otherwise noted. Property-based tests use `hypothesi
     - Guard all AI calls with `has_feature(db, tenant_id, "ai_call")` and fall back to rules-only on quota exhaustion
     - _Requirements: 6.5, 7.4, 7.5, 19.6, 28.2, 28.3_
 
-  - [ ] 6.8 Checkpoint — ensure all tests pass through Phase 6
+  - [x] 6.8 Checkpoint — ensure all tests pass through Phase 6
     - Run `pytest tests/` and fix any regressions
     - _Requirements: 1.1–20.10_
 
@@ -456,7 +456,7 @@ All tasks are Python unless otherwise noted. Property-based tests use `hypothesi
     - Sync Redis counter back to `TenantConfig.ai_calls_today` in DB during the reset job
     - _Requirements: 28.2, 28.9_
 
-  - [ ] 9.10 Checkpoint — ensure all tests pass through Phase 9
+  - [x] 9.10 Checkpoint — ensure all tests pass through Phase 9
     - Run `pytest tests/` and fix any regressions
     - _Requirements: 27.1–28.13_
 

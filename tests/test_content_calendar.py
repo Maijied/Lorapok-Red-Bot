@@ -21,7 +21,7 @@ def _past(minutes=5):
 
 
 def test_schedule_post_creates_record(db):
-    post_id = schedule_post(db, "python", "Test Title", "Test body", _future())
+    schedule_post(db, "python", "Test Title", "Test body", _future())
     posts = get_scheduled_posts(db, "python")
     assert len(posts) == 1
     assert posts[0]["title"] == "Test Title"
@@ -48,8 +48,9 @@ def test_cancel_nonexistent_post(db):
 
 def test_publish_due_posts_idempotent(db):
     """Publishing a due post twice should not re-publish it."""
-    from app.dashboard.models import ScheduledPost
     from datetime import datetime, timezone
+
+    from app.dashboard.models import ScheduledPost
 
     # Insert a due post directly (bypassing the future-only guard)
     post = ScheduledPost(

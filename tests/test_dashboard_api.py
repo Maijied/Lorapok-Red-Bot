@@ -3,13 +3,12 @@
 import os
 from datetime import date, timedelta
 
-import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 import app.dashboard.models  # noqa: F401 — register all models
-from app.dashboard.api import app, _db_dep
+from app.dashboard.api import _db_dep, app
 from app.dashboard.models import DailyMetric
 from app.database import Base
 from app.moderation.queue import queue_case

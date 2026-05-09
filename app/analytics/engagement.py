@@ -32,10 +32,7 @@ def predict_engagement(
     created_utc = getattr(submission, "created_utc", time.time())
     age_minutes = max(1, (time.time() - created_utc) / 60)
     score = max(0, getattr(submission, "score", 0))
-    num_comments = max(0, getattr(submission, "num_comments", 0))
-
     upvote_velocity = score / age_minutes
-    comment_velocity = num_comments / age_minutes
 
     if not historical_data:
         predicted_upvotes = max(0, round(upvote_velocity * 60 * 24))

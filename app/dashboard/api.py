@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import os
-from typing import Any
 
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -84,11 +83,16 @@ def metrics(db: Session = Depends(_db_dep)):
 
 @app.get("/analytics/growth")
 def analytics_growth(db: Session = Depends(_db_dep)):
-    from app.dashboard.models import DailyMetric
     from datetime import date, timedelta
 
+    from app.dashboard.models import DailyMetric
+
     dates = [(date.today() - timedelta(days=i)).isoformat() for i in range(29, -1, -1)]
-    records = db.query(DailyMetric).filter(DailyMetric.metric_date >= date.today() - timedelta(days=29)).all()
+    records = (
+        db.query(DailyMetric)
+        .filter(DailyMetric.metric_date >= date.today() - timedelta(days=29))
+        .all()
+    )
     by_date: dict[str, dict[str, int]] = {d: {} for d in dates}
     for r in records:
         key = r.metric_date.isoformat() if r.metric_date else ""
@@ -119,13 +123,19 @@ def analytics_cohort(db: Session = Depends(_db_dep), settings: Settings = Depend
 
 @app.get("/analytics/health-score")
 def analytics_health_score(db: Session = Depends(_db_dep), settings: Settings = Depends(_settings)):
+
     from app.analytics.health_score import compute_health_score
-    from dataclasses import asdict
 
     results = {}
     for sub in settings.subreddit_names:
         score = compute_health_score(db, sub, tenant_id=settings.tenant_id)
-        results[sub] = {"total": score.total, "growth": score.growth, "engagement": score.engagement, "moderation": score.moderation, "spam": score.spam}
+        results[sub] = {
+                "total": score.total,
+                "growth": score.growth,
+                "engagement": score.engagement,
+                "moderation": score.moderation,
+                "spam": score.spam,
+            }
     return results
 
 
@@ -155,7 +165,12 @@ class ResolveRequest(BaseModel):
 
 
 @app.post("/reviews/{case_id}/resolve")
-def resolve_review(case_id: str, body: ResolveRequest, db: Session = Depends(_db_dep), settings: Settings = Depends(_settings)):
+def resolve_review(
+    case_id: str,
+    body: ResolveRequest,
+    db: Session = Depends(_db_dep),
+    settings: Settings = Depends(_settings),
+):
     from app.moderation.queue import list_queue, resolve_case
 
     ok = resolve_case(db, case_id, body.status, body.reviewer_note, tenant_id=settings.tenant_id)
@@ -171,8 +186,24 @@ def resolve_review(case_id: str, body: ResolveRequest, db: Session = Depends(_db
 def list_pending_posts(db: Session = Depends(_db_dep)):
     from app.dashboard.models import PendingPost
 
-    posts = db.query(PendingPost).filter(PendingPost.status == "pending").order_by(PendingPost.created_at.desc()).all()
-    return {"drafts": [{"id": p.id, "title": p.title, "body": p.body, "source_url": p.source_url, "created_at": p.created_at.isoformat() if p.created_at else None} for p in posts]}
+    posts = (
+        db.query(PendingPost)
+        .filter(PendingPost.status == "pending")
+        .order_by(PendingPost.created_at.desc())
+        .all()
+    )
+    return {
+        "drafts": [
+            {
+                "id": p.id,
+                "title": p.title,
+                "body": p.body,
+                "source_url": p.source_url,
+                "created_at": p.created_at.isoformat() if p.created_at else None,
+            }
+            for p in posts
+        ]
+    }
 
 
 class PostActionRequest(BaseModel):
@@ -205,7 +236,11 @@ def memory(db: Session = Depends(_db_dep), settings: Settings = Depends(_setting
 
 
 @app.get("/users/{username}/reputation")
-def user_reputation(username: str, db: Session = Depends(_db_dep), settings: Settings = Depends(_settings)):
+def user_reputation(
+    username: str,
+    db: Session = Depends(_db_dep),
+    settings: Settings = Depends(_settings),
+):
     from app.dashboard.models import UserReputation
 
     records = db.query(UserReputation).filter(
@@ -214,7 +249,15 @@ def user_reputation(username: str, db: Session = Depends(_db_dep), settings: Set
     ).all()
     if not records:
         raise HTTPException(404, f"No reputation data for u/{username}")
-    return [{"subreddit": r.subreddit_name, "score": r.reputation_score, "flair_tier": r.flair_tier, "is_contributor": r.is_contributor} for r in records]
+    return [
+        {
+            "subreddit": r.subreddit_name,
+            "score": r.reputation_score,
+            "flair_tier": r.flair_tier,
+            "is_contributor": r.is_contributor,
+        }
+        for r in records
+    ]
 
 
 # ── Modmail ───────────────────────────────────────────────────────────────────
@@ -228,7 +271,21 @@ def list_modmail(db: Session = Depends(_db_dep), settings: Settings = Depends(_s
         ModmailRecord.tenant_id == settings.tenant_id,
         ModmailRecord.status.in_(["open", "needs_human"]),
     ).order_by(ModmailRecord.created_at.desc()).limit(50).all()
-    return {"modmail": [{"id": r.id, "conversation_id": r.conversation_id, "subject": r.subject, "category": r.category, "status": r.status, "sla_deadline": r.sla_deadline.isoformat() if r.sla_deadline else None} for r in records]}
+    return {
+        "modmail": [
+            {
+                "id": r.id,
+                "conversation_id": r.conversation_id,
+                "subject": r.subject,
+                "category": r.category,
+                "status": r.status,
+                "sla_deadline": (
+                    r.sla_deadline.isoformat() if r.sla_deadline else None
+                ),
+            }
+            for r in records
+        ]
+    }
 
 
 class ModmailReplyRequest(BaseModel):
@@ -265,7 +322,11 @@ class FlairAutoAssignRequest(BaseModel):
 
 
 @app.post("/flair/auto-assign")
-def flair_auto_assign(body: FlairAutoAssignRequest, db: Session = Depends(_db_dep), settings: Settings = Depends(_settings)):
+def flair_auto_assign(
+    body: FlairAutoAssignRequest,
+    db: Session = Depends(_db_dep),
+    settings: Settings = Depends(_settings),
+):
     return {"ok": True, "note": "Flair batch runs automatically via scheduler."}
 
 
@@ -277,7 +338,16 @@ def wiki_pages(db: Session = Depends(_db_dep), settings: Settings = Depends(_set
     from app.dashboard.models import WikiPage
 
     pages = db.query(WikiPage).filter(WikiPage.tenant_id == settings.tenant_id).all()
-    return {"pages": [{"subreddit": p.subreddit_name, "name": p.page_name, "auto_update": p.auto_update_enabled} for p in pages]}
+    return {
+        "pages": [
+            {
+                "subreddit": p.subreddit_name,
+                "name": p.page_name,
+                "auto_update": p.auto_update_enabled,
+            }
+            for p in pages
+        ]
+    }
 
 
 class WikiUpdateRequest(BaseModel):
@@ -286,8 +356,16 @@ class WikiUpdateRequest(BaseModel):
 
 
 @app.post("/wiki/pages/{page_name}/update")
-def wiki_update(page_name: str, body: WikiUpdateRequest, db: Session = Depends(_db_dep), settings: Settings = Depends(_settings)):
-    return {"ok": True, "note": "Wiki update queued. Apply via wiki_manager with Reddit credentials."}
+def wiki_update(
+    page_name: str,
+    body: WikiUpdateRequest,
+    db: Session = Depends(_db_dep),
+    settings: Settings = Depends(_settings),
+):
+    return {
+        "ok": True,
+        "note": "Wiki update queued. Apply via wiki_manager with Reddit credentials.",
+    }
 
 
 # ── Webhooks ──────────────────────────────────────────────────────────────────
@@ -307,7 +385,11 @@ class WebhookCreateRequest(BaseModel):
 
 
 @app.post("/webhooks")
-def create_webhook(body: WebhookCreateRequest, db: Session = Depends(_db_dep), settings: Settings = Depends(_settings)):
+def create_webhook(
+    body: WebhookCreateRequest,
+    db: Session = Depends(_db_dep),
+    settings: Settings = Depends(_settings),
+):
     from app.integrations.webhooks import register_webhook
 
     hook = register_webhook(db, settings.tenant_id, body.url, body.events, body.secret)
@@ -315,7 +397,11 @@ def create_webhook(body: WebhookCreateRequest, db: Session = Depends(_db_dep), s
 
 
 @app.delete("/webhooks/{webhook_id}")
-def delete_webhook_endpoint(webhook_id: int, db: Session = Depends(_db_dep), settings: Settings = Depends(_settings)):
+def delete_webhook_endpoint(
+    webhook_id: int,
+    db: Session = Depends(_db_dep),
+    settings: Settings = Depends(_settings),
+):
     from app.integrations.webhooks import delete_webhook
 
     ok = delete_webhook(db, settings.tenant_id, webhook_id)
@@ -346,20 +432,32 @@ class ScheduledPostRequest(BaseModel):
 
 
 @app.post("/scheduled-posts")
-def create_scheduled_post(body: ScheduledPostRequest, db: Session = Depends(_db_dep), settings: Settings = Depends(_settings)):
-    from datetime import datetime, timezone
+def create_scheduled_post(
+    body: ScheduledPostRequest,
+    db: Session = Depends(_db_dep),
+    settings: Settings = Depends(_settings),
+):
+    from datetime import datetime
+
     from app.posting.content_calendar import schedule_post
 
     try:
         post_at = datetime.fromisoformat(body.post_at.replace("Z", "+00:00"))
-        post_id = schedule_post(db, body.subreddit_name, body.title, body.body, post_at, body.flair_id, settings.tenant_id)
+        post_id = schedule_post(
+            db, body.subreddit_name, body.title, body.body,
+            post_at, body.flair_id, settings.tenant_id,
+        )
         return {"id": post_id}
     except ValueError as exc:
         raise HTTPException(400, str(exc))
 
 
 @app.delete("/scheduled-posts/{post_id}")
-def cancel_scheduled_post_endpoint(post_id: str, db: Session = Depends(_db_dep), settings: Settings = Depends(_settings)):
+def cancel_scheduled_post_endpoint(
+    post_id: str,
+    db: Session = Depends(_db_dep),
+    settings: Settings = Depends(_settings),
+):
     from app.posting.content_calendar import cancel_scheduled_post
 
     ok = cancel_scheduled_post(db, post_id, tenant_id=settings.tenant_id)
@@ -384,7 +482,13 @@ class PolicySyncRequest(BaseModel):
 
 @app.post("/subreddits/sync-policy")
 def sync_policy_endpoint(body: PolicySyncRequest, db: Session = Depends(_db_dep)):
-    return {"ok": True, "note": "Policy sync requires Reddit credentials — trigger via worker or CLI."}
+    return {
+        "ok": True,
+        "note": (
+            "Policy sync requires Reddit credentials "
+            "— trigger via worker or CLI."
+        ),
+    }
 
 
 # ── Billing ───────────────────────────────────────────────────────────────────
@@ -407,8 +511,8 @@ def billing_subscription(db: Session = Depends(_db_dep), settings: Settings = De
 
 @app.post("/billing/portal")
 def billing_portal(db: Session = Depends(_db_dep), settings: Settings = Depends(_settings)):
-    from app.dashboard.models import TenantConfig
     from app.billing.stripe_client import create_portal_session
+    from app.dashboard.models import TenantConfig
 
     tenant = db.query(TenantConfig).filter(TenantConfig.tenant_id == settings.tenant_id).first()
     if not tenant or not tenant.stripe_customer_id:

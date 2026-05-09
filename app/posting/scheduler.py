@@ -48,9 +48,10 @@ def register_all_jobs(
 def _register_weekly_trending(scheduler, settings, session_factory) -> None:
     def _job() -> None:
         try:
+            import praw
+
             from app.integrations.github_integration import fetch_trending_repos
             from app.posting.trending import build_trending_thread
-            import praw
 
             reddit = praw.Reddit(
                 client_id=settings.reddit_client_id,
@@ -130,8 +131,9 @@ def _register_metrics_flush(scheduler, settings, session_factory) -> None:
 def _register_scheduled_post_publisher(scheduler, settings, session_factory) -> None:
     def _job() -> None:
         try:
-            from app.posting.content_calendar import publish_due_posts
             import praw
+
+            from app.posting.content_calendar import publish_due_posts
 
             reddit = praw.Reddit(
                 client_id=settings.reddit_client_id,
@@ -186,12 +188,13 @@ def _register_ai_quota_reset(scheduler, settings, session_factory) -> None:
 def _register_contributor_batches(scheduler, settings, session_factory) -> None:
     def _job() -> None:
         try:
+            import praw
+
+            from app.billing.features import has_feature
             from app.users.contributors import (
                 run_contributor_demotion_batch,
                 run_contributor_promotion_batch,
             )
-            from app.billing.features import has_feature
-            import praw
 
             reddit = praw.Reddit(
                 client_id=settings.reddit_client_id,
@@ -225,9 +228,10 @@ def _register_contributor_batches(scheduler, settings, session_factory) -> None:
 def _register_user_flair_batch(scheduler, settings, session_factory) -> None:
     def _job() -> None:
         try:
-            from app.subreddit.flair_engine import run_user_flair_batch
-            from app.billing.features import has_feature
             import praw
+
+            from app.billing.features import has_feature
+            from app.subreddit.flair_engine import run_user_flair_batch
 
             reddit = praw.Reddit(
                 client_id=settings.reddit_client_id,
@@ -259,8 +263,8 @@ def _register_user_flair_batch(scheduler, settings, session_factory) -> None:
 def _register_sentiment_alert(scheduler, settings, session_factory) -> None:
     def _job() -> None:
         try:
-            from app.moderation.sentiment import check_sentiment_alert
             from app.billing.features import has_feature
+            from app.moderation.sentiment import check_sentiment_alert
 
             db = session_factory()
             try:

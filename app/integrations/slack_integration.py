@@ -40,7 +40,10 @@ def handle_slack_slash_command(
     if command == "queue":
         from app.moderation.queue import list_queue
 
-        cases = list_queue(db, status="pending", tenant_id=getattr(settings, "tenant_id", "default"))
+        cases = list_queue(
+            db, status="pending",
+            tenant_id=getattr(settings, "tenant_id", "default"),
+        )
         if not cases:
             return "✅ Review queue is empty."
         lines = [f"*{len(cases)} pending case(s):*"]
@@ -51,13 +54,19 @@ def handle_slack_slash_command(
     if command == "approve" and args:
         from app.moderation.queue import resolve_case
 
-        ok = resolve_case(db, args[0], "approved", tenant_id=getattr(settings, "tenant_id", "default"))
+        ok = resolve_case(
+            db, args[0], "approved",
+            tenant_id=getattr(settings, "tenant_id", "default"),
+        )
         return f"✅ Case {args[0]} approved." if ok else f"❌ Could not approve case {args[0]}."
 
     if command == "reject" and args:
         from app.moderation.queue import resolve_case
 
-        ok = resolve_case(db, args[0], "rejected", tenant_id=getattr(settings, "tenant_id", "default"))
+        ok = resolve_case(
+            db, args[0], "rejected",
+            tenant_id=getattr(settings, "tenant_id", "default"),
+        )
         return f"✅ Case {args[0]} rejected." if ok else f"❌ Could not reject case {args[0]}."
 
     if command == "stats":

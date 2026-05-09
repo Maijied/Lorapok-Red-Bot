@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import Any
 
 from sqlalchemy.orm import Session
 
@@ -83,9 +82,15 @@ class SubscriptionTier:
 
 TIERS: dict[str, SubscriptionTier] = {
     "free": SubscriptionTier("free", 0.0, "", 1, 100, _FREE_FEATURES),
-    "starter": SubscriptionTier("starter", 19.0, "STRIPE_PRICE_STARTER_MONTHLY", 3, 1000, _STARTER_FEATURES),
-    "pro": SubscriptionTier("pro", 49.0, "STRIPE_PRICE_PRO_MONTHLY", 10, -1, _PRO_FEATURES),
-    "agency": SubscriptionTier("agency", 149.0, "STRIPE_PRICE_AGENCY_MONTHLY", -1, -1, _AGENCY_FEATURES),
+    "starter": SubscriptionTier(
+        "starter", 19.0, "STRIPE_PRICE_STARTER_MONTHLY", 3, 1000, _STARTER_FEATURES
+    ),
+    "pro": SubscriptionTier(
+        "pro", 49.0, "STRIPE_PRICE_PRO_MONTHLY", 10, -1, _PRO_FEATURES
+    ),
+    "agency": SubscriptionTier(
+        "agency", 149.0, "STRIPE_PRICE_AGENCY_MONTHLY", -1, -1, _AGENCY_FEATURES
+    ),
     "enterprise": SubscriptionTier("enterprise", 0.0, "", -1, -1, _ENTERPRISE_FEATURES),
 }
 

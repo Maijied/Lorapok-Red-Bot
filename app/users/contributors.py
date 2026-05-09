@@ -29,7 +29,9 @@ def add_contributor(reddit: Any, subreddit_name: str, username: str, dry_run: bo
         return False
 
 
-def remove_contributor(reddit: Any, subreddit_name: str, username: str, dry_run: bool = True) -> bool:
+def remove_contributor(
+    reddit: Any, subreddit_name: str, username: str, dry_run: bool = True
+) -> bool:
     if dry_run:
         log.info("DRY_RUN remove_contributor r/%s ← u/%s", subreddit_name, username)
         return True
@@ -98,6 +100,9 @@ def run_contributor_demotion_batch(
             rep.is_contributor = False
             db.commit()
             demoted += 1
-            log.info("Demoted u/%s from contributor in r/%s (inactive)", rep.username, subreddit_name)
+            log.info(
+                "Demoted u/%s from contributor in r/%s (inactive)",
+                rep.username, subreddit_name,
+            )
 
     return demoted

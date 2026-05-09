@@ -30,8 +30,9 @@ def get_session_factory(engine):
 def run_migrations(database_url: str) -> None:
     """Run ``alembic upgrade head`` programmatically at startup."""
     try:
-        from alembic import command
         from alembic.config import Config
+
+        from alembic import command
 
         alembic_cfg = Config("alembic.ini")
         alembic_cfg.set_main_option("sqlalchemy.url", database_url)

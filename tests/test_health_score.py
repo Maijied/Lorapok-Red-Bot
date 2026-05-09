@@ -5,7 +5,9 @@ from app.analytics.health_score import SubredditHealthScore, compute_health_scor
 
 def test_components_sum_to_total(db):
     score = compute_health_score(db, "python", tenant_id="default")
-    assert abs(score.total - (score.growth + score.engagement + score.moderation + score.spam)) < 0.001
+    assert abs(
+        score.total - (score.growth + score.engagement + score.moderation + score.spam)
+    ) < 0.001
 
 
 def test_components_in_range(db):

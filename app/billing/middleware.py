@@ -40,8 +40,9 @@ async def feature_gate_middleware(request: Request, call_next: Any) -> Any:
         return await call_next(request)
 
     try:
-        from app.database import get_engine, get_session_factory
         import os
+
+        from app.database import get_engine, get_session_factory
 
         engine = get_engine(os.getenv("DATABASE_URL", ""))
         session_factory = get_session_factory(engine)
@@ -54,8 +55,10 @@ async def feature_gate_middleware(request: Request, call_next: Any) -> Any:
                     status_code=403,
                     content={
                         "error": "feature_not_available",
-                        "message": f"Feature '{required_feature}' requires a higher subscription tier. "
-                        "Visit /billing/portal to upgrade.",
+                        "message": (
+                            f"Feature '{required_feature}' requires a higher "
+                            "subscription tier. Visit /billing/portal to upgrade."
+                        ),
                         "required_feature": required_feature,
                     },
                 )

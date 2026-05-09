@@ -21,12 +21,12 @@ from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
 from app.config import Settings
+from app.dashboard.metrics import metrics_store
 from app.database import get_engine, get_session_factory, init_db
 from app.moderation.classifier import _to_decision, classify_text
 from app.moderation.memory import remember_case
 from app.moderation.queue import queue_case
 from app.moderation.rules import ModerationDecision, apply_light_rules
-from app.dashboard.metrics import metrics_store
 from app.posting.scheduler import create_scheduler, register_all_jobs
 from app.utils.logging import setup_logging
 from app.utils.notify import send_alert_sync
