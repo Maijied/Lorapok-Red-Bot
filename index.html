@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Lorapok Red Bot — Full-spectrum Reddit automation platform. AI moderation, analytics, scheduling, and SaaS billing. Open-source and free to deploy." />
+  <title>Lorapok Red Bot — Reddit Automation Platform</title>
+  <link rel="stylesheet" href="css/style.css" />
+  <link rel="icon" href="https://lorapok.github.io/assets/lorapok-hero.png" />
+</head>
+<body>
+  <!-- Navigation -->
+  <nav class="nav" role="navigation" aria-label="Main navigation">
+    <div class="nav-inner">
+      <a href="#" class="nav-brand" aria-label="Lorapok Red Bot home">
+        <span class="brand-lorapok">Lorapok</span>
+        <span class="brand-red">Red</span>
+        <span class="brand-bot">Bot</span>
+      </a>
+      <div class="nav-links">
+        <a href="#features" aria-label="Features">Features</a>
+        <a href="#pricing" aria-label="Pricing">Pricing</a>
+        <a href="#architecture" aria-label="Architecture">Architecture</a>
+        <a href="#deploy" aria-label="Deploy">Deploy</a>
+        <a href="https://github.com/Lorapok/lorapok-red-bot" target="_blank" rel="noopener" aria-label="GitHub repository" class="btn-outline">GitHub</a>
+      </div>
+      <div class="status-badge" id="status-badge" aria-live="polite">
+        <span class="status-dot" id="status-dot"></span>
+        <span id="status-text">Checking…</span>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Hero -->
+  <header class="hero" role="banner">
+    <div class="hero-grid-bg" aria-hidden="true"></div>
+    <div class="hero-content">
+      <div class="hero-tag">BIOLOGICAL UI · OPEN-SOURCE ECOSYSTEM</div>
+      <h1 class="hero-title">
+        Full-spectrum<br />
+        <span class="gradient-text">Reddit Automation</span>
+      </h1>
+      <p class="hero-sub">
+        AI moderation, community analytics, scheduled content, GitHub &amp; Discord integrations —
+        all wrapped in the Lorapok Design Language. Deploy free in minutes.
+      </p>
+      <div class="hero-actions">
+        <a href="#deploy" class="btn-primary" aria-label="Deploy Lorapok Red Bot">Deploy Free</a>
+        <a href="https://github.com/Lorapok/lorapok-red-bot" target="_blank" rel="noopener" class="btn-outline" aria-label="View source on GitHub">View Source</a>
+      </div>
+      <div class="hero-stats" aria-label="Key statistics">
+        <div class="stat"><span class="stat-num">33</span><span class="stat-label">Components</span></div>
+        <div class="stat"><span class="stat-num">100%</span><span class="stat-label">Open Source</span></div>
+        <div class="stat"><span class="stat-num">5</span><span class="stat-label">SaaS Tiers</span></div>
+        <div class="stat"><span class="stat-num">Free</span><span class="stat-label">To Deploy</span></div>
+      </div>
+    </div>
+    <div class="hero-visual" aria-hidden="true">
+      <div class="larva-container">
+        <img src="https://lorapok.github.io/assets/lorapok-hero.png" alt="" class="larva-img" />
+        <div class="larva-glow"></div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Features -->
+  <section class="section" id="features" aria-labelledby="features-heading">
+    <div class="section-inner">
+      <div class="section-tag">FEATURE SURFACE</div>
+      <h2 id="features-heading">Everything Reddit exposes, automated.</h2>
+      <p class="section-sub">Every PRAW endpoint. Every moderation action. One platform.</p>
+      <div class="features-grid">
+        <article class="feature-card" aria-label="AI Moderation">
+          <div class="feature-icon" aria-hidden="true">🤖</div>
+          <h3>AI Moderation</h3>
+          <p>LiteLLM-powered classifier routes comments through rules → AI → human review. Supports OpenAI, Anthropic, Gemini, and Mistral.</p>
+        </article>
+        <article class="feature-card" aria-label="Full Subreddit Control">
+          <div class="feature-icon" aria-hidden="true">⚙️</div>
+          <h3>Full Subreddit Control</h3>
+          <p>Automate settings, flair, wiki, widgets, rules, removal reasons, and policy sync across unlimited subreddits.</p>
+        </article>
+        <article class="feature-card" aria-label="Modmail Triage">
+          <div class="feature-icon" aria-hidden="true">📬</div>
+          <h3>Modmail Triage</h3>
+          <p>Auto-categorise conversations, reply to common questions, track SLA deadlines, and manage ban appeals automatically.</p>
+        </article>
+        <article class="feature-card" aria-label="User Reputation">
+          <div class="feature-icon" aria-hidden="true">⭐</div>
+          <h3>User Reputation</h3>
+          <p>Score every user by activity, auto-assign flair tiers, promote contributors, and detect suspicious accounts.</p>
+        </article>
+        <article class="feature-card" aria-label="Content Calendar">
+          <div class="feature-icon" aria-hidden="true">📅</div>
+          <h3>Content Calendar</h3>
+          <p>Schedule posts for optimal engagement times. Auto-post weekly trending threads from GitHub and developer news.</p>
+        </article>
+        <article class="feature-card" aria-label="Analytics Dashboard">
+          <div class="feature-icon" aria-hidden="true">📊</div>
+          <h3>Analytics Dashboard</h3>
+          <p>Subreddit health score, cohort analysis, sentiment trends, engagement prediction, and multi-subreddit aggregates.</p>
+        </article>
+        <article class="feature-card" aria-label="Cross-Subreddit Spam Detection">
+          <div class="feature-icon" aria-hidden="true">🛡️</div>
+          <h3>Spam Detection</h3>
+          <p>Detect coordinated spam across all your subreddits. HMAC-signed outbound webhooks for Zapier and Make.</p>
+        </article>
+        <article class="feature-card" aria-label="Integrations">
+          <div class="feature-icon" aria-hidden="true">🔗</div>
+          <h3>Integrations</h3>
+          <p>GitHub release monitoring, Discord alerts, Slack slash commands, Telegram bot, and outbound webhooks.</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- Pricing -->
+  <section class="section section-alt" id="pricing" aria-labelledby="pricing-heading">
+    <div class="section-inner">
+      <div class="section-tag">SAAS TIERS</div>
+      <h2 id="pricing-heading">Start free. Scale when you need to.</h2>
+      <div class="pricing-grid">
+        <article class="pricing-card" aria-label="Free tier">
+          <div class="pricing-tier">Free</div>
+          <div class="pricing-price">$0<span>/mo</span></div>
+          <ul class="pricing-features" aria-label="Free tier features">
+            <li>1 subreddit</li>
+            <li>100 AI calls/day</li>
+            <li>Basic moderation</li>
+            <li>Discord + GitHub integration</li>
+            <li>Public dashboard</li>
+          </ul>
+          <a href="https://github.com/Lorapok/lorapok-red-bot" class="btn-outline" aria-label="Get started with free tier">Get Started</a>
+        </article>
+        <article class="pricing-card" aria-label="Starter tier">
+          <div class="pricing-tier">Starter</div>
+          <div class="pricing-price">$19<span>/mo</span></div>
+          <ul class="pricing-features" aria-label="Starter tier features">
+            <li>3 subreddits</li>
+            <li>1,000 AI calls/day</li>
+            <li>Modmail triage</li>
+            <li>Flair automation</li>
+            <li>Basic analytics</li>
+          </ul>
+          <a href="#deploy" class="btn-outline" aria-label="Get started with Starter tier">Get Started</a>
+        </article>
+        <article class="pricing-card pricing-featured" aria-label="Pro tier — recommended">
+          <div class="pricing-badge" aria-label="Most popular">Most Popular</div>
+          <div class="pricing-tier">Pro</div>
+          <div class="pricing-price">$49<span>/mo</span></div>
+          <ul class="pricing-features" aria-label="Pro tier features">
+            <li>10 subreddits</li>
+            <li>Unlimited AI</li>
+            <li>Advanced analytics</li>
+            <li>Content calendar</li>
+            <li>Slack + Telegram</li>
+            <li>Engagement predictor</li>
+          </ul>
+          <a href="#deploy" class="btn-primary" aria-label="Get started with Pro tier">Get Started</a>
+        </article>
+        <article class="pricing-card" aria-label="Agency tier">
+          <div class="pricing-tier">Agency</div>
+          <div class="pricing-price">$149<span>/mo</span></div>
+          <ul class="pricing-features" aria-label="Agency tier features">
+            <li>Unlimited subreddits</li>
+            <li>White-label dashboard</li>
+            <li>API access</li>
+            <li>Custom webhooks</li>
+            <li>Policy sync</li>
+            <li>4h SLA support</li>
+          </ul>
+          <a href="#deploy" class="btn-outline" aria-label="Get started with Agency tier">Get Started</a>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- Architecture -->
+  <section class="section" id="architecture" aria-labelledby="arch-heading">
+    <div class="section-inner">
+      <div class="section-tag">SYSTEM DESIGN</div>
+      <h2 id="arch-heading">Layered architecture. Clean boundaries.</h2>
+      <p class="section-sub">Thin entrypoints around a pure domain core. Multi-tenant from day one.</p>
+      <div class="arch-diagram glass-panel" aria-label="Architecture diagram">
+        <pre class="arch-pre">
+  Reddit API ──► Worker (main.py) ──► Rule Engine ──► AI Classifier
+                      │                                    │
+                      ▼                                    ▼
+               PostgreSQL DB ◄──── Review Queue ◄──── Human Mods
+                      │
+                      ▼
+               FastAPI Dashboard ──► Stripe Billing ──► Feature Flags
+                      │
+                      ▼
+               GitHub Pages ──► Marketing Site (Lorapok Design Language)
+        </pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- Deploy -->
+  <section class="section section-alt" id="deploy" aria-labelledby="deploy-heading">
+    <div class="section-inner">
+      <div class="section-tag">DEPLOYMENT</div>
+      <h2 id="deploy-heading">Deploy in minutes. Free forever.</h2>
+      <div class="deploy-grid">
+        <div class="deploy-card glass-panel">
+          <h3>Railway (Recommended)</h3>
+          <p>One-click deploy with managed PostgreSQL and Redis. Always-on free tier.</p>
+          <a href="https://railway.app/new/template" target="_blank" rel="noopener" class="btn-primary deploy-btn" aria-label="Deploy to Railway">
+            Deploy to Railway
+          </a>
+        </div>
+        <div class="deploy-card glass-panel">
+          <h3>Docker Compose</h3>
+          <p>Run locally with PostgreSQL, Redis, worker, and dashboard in one command.</p>
+          <code class="code-block">docker compose up --build</code>
+        </div>
+        <div class="deploy-card glass-panel">
+          <h3>Fly.io</h3>
+          <p>Global edge deployment with automatic restarts and health checks.</p>
+          <code class="code-block">fly deploy</code>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="footer" role="contentinfo">
+    <div class="footer-inner">
+      <div class="footer-brand">
+        <span class="brand-lorapok">Lorapok</span>
+        <span class="brand-red">Red</span>
+        <span class="brand-bot">Bot</span>
+      </div>
+      <p class="footer-sub">Open-source products that feel alive.</p>
+      <nav class="footer-links" aria-label="Footer navigation">
+        <a href="https://github.com/Lorapok/lorapok-red-bot" target="_blank" rel="noopener" aria-label="GitHub">GitHub</a>
+        <a href="https://lorapok.github.io/" target="_blank" rel="noopener" aria-label="Lorapok Labs">Lorapok Labs</a>
+        <a href="https://www.reddit.com/r/LorapokLabs/" target="_blank" rel="noopener" aria-label="Reddit community">Reddit</a>
+        <a href="docs/policy.md" aria-label="Bot policy">Policy</a>
+        <a href="docs/privacy.md" aria-label="Privacy policy">Privacy</a>
+      </nav>
+      <p class="footer-copy">© 2025 Lorapok Labs. MIT License.</p>
+    </div>
+  </footer>
+
+  <script src="js/main.js"></script>
+</body>
+</html>
