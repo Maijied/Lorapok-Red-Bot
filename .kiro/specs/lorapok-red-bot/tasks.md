@@ -181,12 +181,12 @@ All tasks are Python unless otherwise noted. Property-based tests use `hypothesi
     - **Validates: Requirements 13.5**
     - _Requirements: 13.5_
 
-  - [ ] 4.3 Implement modmail template CRUD
+  - [x] 4.3 Implement modmail template CRUD
     - Implement `list_modmail_templates(db, tenant_id)` and `create_modmail_template(db, tenant_id, name, category, body)`
     - Implement template variable substitution for `{{username}}`, `{{subreddit}}`, `{{ban_reason}}`
     - _Requirements: 13.11, 13.12_
 
-  - [ ] 4.4 Wire modmail stream into `app/main.py`
+  - [x] 4.4 Wire modmail stream into `app/main.py`
     - Add `subreddit.mod.stream.modmail_conversations()` loop alongside comment/submission streams
     - Call `triage_conversation` for each new conversation; guard with `has_feature(db, tenant_id, "modmail_triage")`
     - _Requirements: 13.1, 28.7_
@@ -242,7 +242,7 @@ All tasks are Python unless otherwise noted. Property-based tests use `hypothesi
     - Auto-create `"HUMAN_OVERRIDE"` note when `was_override=True` is set on a `ReviewCaseRecord`
     - _Requirements: 18.1–18.6_
 
-  - [ ] 5.8 Wire user management jobs into scheduler
+  - [x] 5.8 Wire user management jobs into scheduler
     - Register `run_contributor_promotion_batch` and `run_contributor_demotion_batch` as weekly APScheduler jobs
     - Register `run_user_flair_batch` as a daily APScheduler job
     - Guard all batch jobs with `has_feature` checks before executing
@@ -293,7 +293,7 @@ All tasks are Python unless otherwise noted. Property-based tests use `hypothesi
     - **Validates: Requirement 20.5**
     - _Requirements: 20.5_
 
-  - [ ] 6.7 Wire AI intelligence jobs into scheduler and stream
+  - [x] 6.7 Wire AI intelligence jobs into scheduler and stream
     - Call `record_submission` + `detect_cross_sub_spam` in `process_submission`; queue if `signal.score >= 0.7`
     - Call `analyze_sentiment` + `record_sentiment` in `process_comment` (async background task, non-blocking)
     - Call `check_sentiment_alert` in a scheduled job (hourly); dispatch alert to notification channels if triggered
@@ -383,7 +383,7 @@ All tasks are Python unless otherwise noted. Property-based tests use `hypothesi
     - **Validates: Requirement 26.7**
     - _Requirements: 26.7_
 
-  - [ ] 8.5 Wire `dispatch_event` calls into domain modules
+  - [x] 8.5 Wire `dispatch_event` calls into domain modules
     - Call `dispatch_event` after: comment/submission removed, user banned, modmail received, queue case added, flair assigned, post published, health score alert, sentiment alert, spam signal detected
     - All dispatch calls must be non-blocking (background task or fire-and-forget)
     - _Requirements: 26.2, 26.8_
@@ -423,7 +423,7 @@ All tasks are Python unless otherwise noted. Property-based tests use `hypothesi
     - **Validates: Requirement 28.1**
     - _Requirements: 28.1_
 
-  - [ ] 9.5 Implement `app/billing/tenant.py`
+  - [x] 9.5 Implement `app/billing/tenant.py`
     - Implement `get_or_create_tenant(db, reddit_username)` with upsert on `reddit_username` UNIQUE constraint
     - Implement `update_tenant_tier(db, tenant_id, tier)` updating `TenantConfig.tier`
     - Implement `add_managed_subreddit(db, tenant_id, subreddit_name)` and `remove_managed_subreddit`
@@ -444,13 +444,13 @@ All tasks are Python unless otherwise noted. Property-based tests use `hypothesi
     - Return HTTP 403 with upgrade prompt message when feature check fails
     - _Requirements: 28.6, 28.10, 29.17_
 
-  - [ ] 9.8 Register Stripe webhook route and billing endpoints in `app/dashboard/api.py`
+  - [x] 9.8 Register Stripe webhook route and billing endpoints in `app/dashboard/api.py`
     - Add `POST /billing/stripe-webhook` route calling `handle_stripe_webhook`
     - Add `POST /billing/create-customer` and `POST /billing/subscribe` routes
     - Mount `feature_gate_middleware` on the FastAPI app
     - _Requirements: 27.9, 29.12_
 
-  - [ ] 9.9 Implement AI quota tracking and reset job
+  - [x] 9.9 Implement AI quota tracking and reset job
     - Increment `TenantConfig.ai_calls_today` in Redis on every AI call (hot path — avoid DB write per comment)
     - Register APScheduler job at midnight UTC to reset `ai_calls_today` to 0 for all tenants
     - Sync Redis counter back to `TenantConfig.ai_calls_today` in DB during the reset job
