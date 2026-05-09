@@ -1,17 +1,56 @@
+# Environments
 .venv/
-__pycache__/
-.pytest_cache/
-.ruff_cache/
+env/
+venv/
 .env
-*.pyc
-*.pyo
-*.pyd
-*.sqlite3
-.coverage
-dist/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
 build/
-httpx
-json
-os
-praw
-time
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Testing
+.pytest_cache/
+.tox/
+.coverage
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+
+# Linting
+.ruff_cache/
+.mypy_cache/
+
+# Databases
+*.sqlite3
+postgres_data/
+redis_data/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db

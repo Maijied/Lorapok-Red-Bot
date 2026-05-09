@@ -1,9 +1,14 @@
 import json
+import logging
 import os
 from typing import Any
 
-from openai import OpenAI
+import litellm
 
+logger = logging.getLogger(__name__)
+
+# Configure LiteLLM to use environment variables for keys
+# It will look for OPENAI_API_KEY, ANTHROPIC_API_KEY, etc. automatically.
 
 def _normalize_confidence(value: Any) -> float:
     try:
@@ -13,15 +18,9 @@ def _normalize_confidence(value: Any) -> float:
     return max(0.0, min(1.0, parsed))
 
 
-def classify_text(text: str, model: str = "gpt-4.1-mini") -> dict[str, Any]:
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        return {
-            "action": "review",
-            "reason": "OPENAI_API_KEY is not configured.",
-            "confidence": 0.0,
-        }
-
+def classify_text(text: str, model: str | None = None) -> dict[str, Any]:
+    ai_model = model or os.getenv("AI_MODEL", "openai/gpt-4o-mini")
+    
     prompt = f"""
 You are a Reddit moderation assistant for developer communities.
 Return strict JSON with keys: action, reason, confidence.
@@ -29,10 +28,13 @@ Allowed actions: allow, review, remove.
 Content: {text}
 """
 
-    client = OpenAI(api_key=api_key)
     try:
-        response = client.responses.create(model=model, input=prompt)
-        raw = response.output_text.strip()
+        response = litellm.completion(
+            model=ai_model,
+            messages=[{"role": "user", "content": prompt}],
+            response_format={"type": "json_object"},
+        )
+        raw = response.choices[0].message.content
         parsed = json.loads(raw)
         action = str(parsed.get("action", "review")).lower().strip()
         if action not in {"allow", "review", "remove"}:
@@ -42,15 +44,32 @@ Content: {text}
             "reason": str(parsed.get("reason", "No reason provided.")).strip(),
             "confidence": _normalize_confidence(parsed.get("confidence", 0.0)),
         }
-    except json.JSONDecodeError:
-        return {
-            "action": "review",
-            "reason": "Model output was not valid JSON.",
-            "confidence": 0.0,
-        }
     except Exception as exc:
+        logger.error(f"Multi-AI Classifier error ({ai_model}): {exc}")
         return {
             "action": "review",
             "reason": f"Classifier failure: {exc}",
             "confidence": 0.0,
         }
+
+
+def summarize_text(text: str, max_words: int = 100, model: str | None = None) -> str:
+    """Generate a concise summary of the provided text using any AI provider."""
+    ai_model = model or os.getenv("AI_MODEL", "openai/gpt-4o-mini")
+    if not text.strip():
+        return ""
+
+    prompt = (
+        f"Summarize the following technical content in under {max_words} words "
+        f"for a developer audience. Focus on key changes or value:\n\n{text}"
+    )
+
+    try:
+        response = litellm.completion(
+            model=ai_model,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        return response.choices[0].message.content.strip()
+    except Exception as exc:
+        logger.error(f"Multi-AI Summary error ({ai_model}): {exc}")
+        return text[:500] + "..."

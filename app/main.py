@@ -2,13 +2,20 @@ import logging
 import time
 from typing import Any
 
+from sqlalchemy.orm import Session
+
 from app.config import Settings
 from app.dashboard.metrics import metrics_store
+from app.dashboard.models import DailyMetric, GithubUpdateTracker, PendingPost  # noqa
+from app.database import get_engine, get_session_factory, init_db
 from app.integrations.discord_integration import send_discord_alert
+from app.integrations.github_integration import fetch_trending_repos
+from app.integrations.github_worker import monitor_repositories
 from app.moderation.classifier import classify_text
 from app.moderation.memory import remember_case
 from app.moderation.queue import queue_case
 from app.moderation.rules import ModerationDecision, apply_light_rules
+from app.posting.scheduler import create_scheduler, schedule_weekly_trending_post
 from app.reddit_client import get_reddit
 from app.utils.logging import setup_logging
 from app.utils.rate_limit import RateLimiter
@@ -34,8 +41,10 @@ def _to_decision(payload: dict[str, Any]) -> ModerationDecision:
     return ModerationDecision(action=action, reason=reason, confidence=confidence)
 
 
-def _apply_decision(comment: Any, decision: ModerationDecision, settings: Settings) -> None:
-    remember_case(comment.body, decision.action, decision.reason, "rules+ai")
+def _apply_decision(
+    db: Session, comment: Any, decision: ModerationDecision, settings: Settings
+) -> None:
+    remember_case(db, comment.body, decision.action, decision.reason, "rules+ai")
 
     if decision.action == "remove":
         if settings.dry_run:
@@ -65,7 +74,7 @@ def _apply_decision(comment: Any, decision: ModerationDecision, settings: Settin
     metrics_store.increment("comments_processed")
 
 
-def process_comment(comment: Any, settings: Settings) -> None:
+def process_comment(db: Session, comment: Any, settings: Settings) -> None:
     rule_decision = apply_light_rules(comment.body)
 
     if (
@@ -77,14 +86,21 @@ def process_comment(comment: Any, settings: Settings) -> None:
             ai_decision.action == "review"
             or ai_decision.confidence < settings.review_confidence_threshold
         ):
-            queue_case(comment.body, ai_decision.reason, source="rules+ai")
+            rec = ai_decision.action if ai_decision.action != "review" else rule_decision.action
+            queue_case(
+                db,
+                comment.body,
+                ai_decision.reason,
+                source="rules+ai",
+                recommended_action=rec,
+            )
             metrics_store.increment("queued_reviews")
             logger.info("Queued comment %s for human review", comment.id)
             return
-        _apply_decision(comment, ai_decision, settings)
+        _apply_decision(db, comment, ai_decision, settings)
         return
 
-    _apply_decision(comment, rule_decision, settings)
+    _apply_decision(db, comment, rule_decision, settings)
 
 
 def main() -> None:
@@ -96,21 +112,67 @@ def main() -> None:
         settings.dry_run,
     )
 
+    # Initialize DB
+    init_db(settings)
+    engine = get_engine(settings)
+    SessionLocal = get_session_factory(engine)
+
     reddit = get_reddit(settings)
     subreddit = reddit.subreddit(settings.subreddit_name)
+
+    # Initialize and start the scheduler
+    scheduler = create_scheduler()
+    
+    # Task 5.3: Weekly Trending Post
+    schedule_weekly_trending_post(
+        scheduler,
+        topic_provider=lambda: fetch_trending_repos(language="python"),
+        publish_callback=lambda p: logger.info(
+            "Weekly post published: %s\nBody: %s", p["title"], p["body"]
+        ),
+    )
+    
+    # Task 7.1: Metric Flushing
+    def _flush_metrics():
+        db = SessionLocal()
+        try:
+            metrics_store.flush_to_db(db)
+        finally:
+            db.close()
+    
+    # Task 8.1: GitHub Repository Monitoring
+    def _monitor_github():
+        db = SessionLocal()
+        try:
+            monitor_repositories(db, settings.monitored_repos)
+        finally:
+            db.close()
+
+    scheduler.add_job(_flush_metrics, "interval", minutes=5, id="flush_metrics")
+    scheduler.add_job(_monitor_github, "interval", hours=1, id="monitor_github")
+    
+    scheduler.start()
+    logger.info("Background scheduler started.")
+
     send_discord_alert(f"Lorapok Red Bot started in r/{settings.subreddit_name}.")
 
     limiter = RateLimiter(min_interval_seconds=2.0)
-    for comment in subreddit.stream.comments(skip_existing=True):
-        try:
-            process_comment(comment, settings)
-            limiter.wait()
-        except KeyboardInterrupt:
-            raise
-        except Exception as exc:
-            logger.exception("Error while processing comment: %s", exc)
-            send_discord_alert(f"Lorapok Red Bot error: {exc}")
-            time.sleep(5)
+    try:
+        for comment in subreddit.stream.comments(skip_existing=True):
+            db = SessionLocal()
+            try:
+                process_comment(db, comment, settings)
+                limiter.wait()
+            except Exception as exc:
+                logger.exception("Error while processing comment: %s", exc)
+                send_discord_alert(f"Lorapok Red Bot error: {exc}")
+                time.sleep(5)
+            finally:
+                db.close()
+    except KeyboardInterrupt:
+        logger.info("Bot shutting down...")
+    finally:
+        scheduler.shutdown()
 
 
 if __name__ == "__main__":

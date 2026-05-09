@@ -1,25 +1,17 @@
-# Lorapok Red Bot policy
-## Purpose statement
-Lorapok Red Bot supports developer communities by assisting moderators with content triage, spam detection, and helpful guidance responses while keeping humans in control of impactful moderation decisions.
+# Lorapok Red Bot Policy
+## Mission
+Lorapok Red Bot is an open-source product of **Lorapok Labs**. Its mission is to empower developer communities through intelligent, transparent, and human-supervised automation.
 
-## Allowed bot actions
-- Flag uncertain content for moderator review.
-- Remove clear spam/promotional abuse based on deterministic and explainable rules.
-- Post practical help prompts for developer troubleshooting context.
-- Send operational alerts to approved moderator channels.
+## Core Principles
+- **Human-in-the-Loop:** High-impact actions (like complex removals or new announcements) are drafted for human approval.
+- **Multi-Brain Support:** Developers can choose their preferred AI provider, ensuring no single-vendor lock-in.
+- **Accountability:** Every automated decision is logged permanently with its logical path (Rules vs. AI) and confidence score.
+- **Privacy:** Minimal data collection focused strictly on moderation and community growth metrics.
 
-## Disallowed bot actions
-- Silent or deceptive moderation actions.
-- Permanent bans without moderator confirmation.
-- Collection or publication of unnecessary personal data.
-- Bypassing subreddit-specific moderator instructions.
+## Prohibited Usage
+- Using the bot for mass harassment or spamming.
+- Operating without clear bot disclosure (User Agent: `LorapokRedBot/1.0`).
+- Automated permanent banning without human verification.
 
-## Escalation rules
-- Any low-confidence or ambiguous moderation outcome must be placed in the review queue.
-- Classifier parsing failures must default to `review`.
-- Repeated false positives should trigger rule/prompt adjustments before expanding automation.
-
-## Moderator override process
-- Moderators can approve, reject, or escalate queued cases.
-- Override notes should be recorded for future tuning.
-- Override outcomes take precedence over automated decisions.
+---
+*A Lorapok Labs Open Source Project.*

@@ -11,3 +11,4 @@ apscheduler
 pydantic
 pytest
 ruff
+litellm

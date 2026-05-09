@@ -1,20 +1,22 @@
-# Lorapok Red Bot architecture overview
-## Runtime flow
-1. Worker starts in `app/main.py`, loads settings, initializes logging, and authenticates Reddit.
-2. Comment stream events are processed through `app/moderation/rules.py`.
-3. Ambiguous items are passed to `app/moderation/classifier.py`.
-4. Low-confidence outcomes are stored in `app/moderation/queue.py` for human review.
-5. Finalized decisions are recorded in `app/moderation/memory.py`.
-6. Metrics are tracked via `app/dashboard/metrics.py` and surfaced through `app/dashboard/api.py`.
+# Lorapok Red Bot Architecture
+## System Overview
+Lorapok Red Bot is built with a decoupled architecture, separating the autonomous worker from the management dashboard.
 
-## Major subsystem boundaries
-- **Core moderation domain**: `app/moderation/*` for decisioning, queueing, and memory.
-- **External IO/integrations**: `app/reddit_client.py`, `app/integrations/*`.
-- **Operational infrastructure**: `app/utils/*` for logging, rate control, text utilities.
-- **Posting/scheduling**: `app/posting/*` for trend thread construction and scheduled publishing hooks.
-- **API surface**: `app/dashboard/api.py` exposes observability and review context.
+## Technical Components
+- **Autonomous Worker (`app/main.py`):** The primary Reddit listener. It streams content, applies logic, and handles background tasks.
+- **Multi-AI Engine (`app/moderation/classifier.py`):** Uses `litellm` to route requests to various LLM providers (OpenAI, Anthropic, Google) based on configuration.
+- **Persistence Layer (`app/database.py`):** A PostgreSQL backend managed by SQLAlchemy, storing decisions, review cases, analytics, and GitHub event logs.
+- **Management API (`app/dashboard/api.py`):** A FastAPI service providing endpoints for the dashboard UI and moderator controls.
+- **Integration Layer (`app/integrations/`):** Modules for GitHub monitoring, Discord alerts, and other external services.
 
-## Entrypoints
-- Worker bot: `python3 -m app.main`
-- Dashboard API: `uvicorn app.dashboard.api:app --reload --host 0.0.0.0 --port 8000`
-- Container orchestration: `docker compose up --build`
+## Runtime Flow
+1. **Ingestion:** Worker streams events from Reddit (PRAW).
+2. **Analysis:** Logic is applied via rules (deterministic) and AI (probabilistic).
+3. **Storage:** Outcomes are recorded in the persistent memory.
+4. **Collaboration:** Uncertain cases or new GitHub content are queued for moderator review in the Labs Command Center.
+5. **Action:** Approved posts or moderation decisions are executed back to Reddit.
+
+## Infrastructure
+- **Containerization:** Fully Dockerized with Compose orchestration.
+- **Automation:** APScheduler handles periodic checks and metrics persistence.
+- **CI/CD:** GitHub Actions for automated linting and unit tests.

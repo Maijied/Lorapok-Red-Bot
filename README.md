@@ -1,64 +1,66 @@
 # Lorapok Red Bot
-Lorapok Red Bot is a Reddit moderation assistant for all developer communities. It combines rule-based checks, AI-assisted classification, a human review queue, trend post helpers, and integrations for moderator visibility.
 
-## Safety and operating principles
-- Assist moderators, do not replace moderators.
-- Keep an audit trail of bot decisions.
-- Prefer review queue escalation for uncertain cases.
-- Use least-privilege credentials and environment-variable based secrets.
-- Run in `DRY_RUN=true` by default for safer local testing.
+**Lorapok Red Bot** is a high-performance Reddit assistant designed for developer communities. It combines rule-based moderation with OpenAI-powered intelligence to maintain community standards while providing automated trending content discovery and release monitoring.
 
-## Current bootstrap scope
-This repository currently includes:
-- Reddit client setup and startup identity check.
-- Comment stream processing loop with retry-safe handling.
-- Rule engine + optional AI classifier fallback to review.
-- In-memory moderation memory and review queue.
-- Discord alert integration stub and GitHub release helper.
-- FastAPI dashboard endpoints (`/health`, `/metrics`, `/reviews`).
-- Docker and Docker Compose local deployment scaffold.
+## 🚀 Key Features
 
-## Quick start
-1. Create and activate a virtual environment.
-2. Install dependencies.
-3. Configure environment variables.
-4. Run in dry-run mode and verify behavior.
+- **🧠 AI-Powered Moderation:** Uses GPT-4o-mini to classify content, with a human-in-the-loop review queue.
+- **📚 Persistent Memory:** Tracks all moderation decisions and overrides in a PostgreSQL backend.
+- **🔭 GitHub Monitoring:** Automatically watches repositories for new releases and issues, generating AI-summarized draft posts.
+- **📊 Interactive Dashboard:** A modern, themed web interface for moderators to review cases, manage growth analytics, and approve automated posts.
+- **⏰ Scheduled Trends:** Automatically discovers and posts weekly trending developer repositories.
+- **🔔 Discord Alerts:** Instant notifications for moderation failures or new content drafts.
 
-```bash path=null start=null
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env
-python3 -m app.main
-```
+## 🛠 Tech Stack
 
-Run dashboard API:
+- **Core:** Python 3.12, PRAW (Reddit API)
+- **AI:** OpenAI GPT-4o-mini
+- **Backend:** FastAPI, SQLAlchemy, PostgreSQL, Redis
+- **Automation:** APScheduler
+- **Deployment:** Docker, Docker Compose, GitHub Actions
 
-```bash path=null start=null
-uvicorn app.dashboard.api:app --reload --host 0.0.0.0 --port 8000
-```
+## 📦 Setup & Installation
 
-## Testing and linting
-```bash path=null start=null
-python3 -m pytest
-ruff check app tests
-python3 -m compileall app tests
-```
+1.  **Clone the Repository:**
+    ```bash
+    git clone https://github.com/your-repo/lorapok-red-bot.git
+    cd lorapok-red-bot
+    ```
 
-## Local container workflow
-```bash path=null start=null
-docker compose up --build
-```
+2.  **Environment Configuration:**
+    ```bash
+    cp .env.example .env
+    # Fill in your REDDIT, OPENAI, and GITHUB credentials in .env
+    ```
 
-## Environment configuration
-Use `.env.example` as the template for required variables:
-- Reddit OAuth credentials
-- OpenAI API key
-- PostgreSQL + Redis connection URLs
-- Discord webhook and GitHub token
-- Subreddit name, log level, and dry-run mode
+3.  **Run with Docker (Recommended):**
+    ```bash
+    docker-compose up --build -d
+    ```
 
-## Policy and architecture docs
-- Bot policy: `docs/policy.md`
-- Privacy and retention: `docs/privacy.md`
-- Architecture overview: `docs/architecture.md`
+4.  **Local Development:**
+    ```bash
+    python -m venv .venv
+    source .venv/bin/activate
+    pip install -r requirements.txt
+    python -m app.main
+    ```
+
+## 🖥 Dashboard
+
+Access the moderator dashboard at `http://localhost:8000`.
+
+- **Pending Review:** Human-in-the-loop queue for suspicious content.
+- **Draft Updates:** Review and approve AI-generated GitHub release posts.
+- **Growth:** Time-series analytics for subreddit activity.
+- **Action Log:** Historical record of all bot and moderator actions.
+
+## 🤝 Documentation
+
+- [Full Usage Guide](docs/how_to_use.md)
+- [Architecture Overview](docs/architecture.md)
+- [Bot Policy](docs/policy.md)
+- [Privacy & Data Retention](docs/privacy.md)
+
+---
+*Built for developers, by Lorapok.*
