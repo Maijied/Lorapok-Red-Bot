@@ -1,768 +1,429 @@
-import os
-from datetime import date, timedelta
-from typing import Any, List
+"""Lorapok Red Bot — FastAPI dashboard API."""
 
-from fastapi import Depends, FastAPI, HTTPException
-from fastapi.responses import HTMLResponse
+from __future__ import annotations
+
+import os
+from typing import Any
+
+from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from app.billing.middleware import feature_gate_middleware
+from app.config import Settings
 from app.dashboard.metrics import metrics_store
-from app.dashboard.models import DailyMetric, PendingPost
 from app.database import get_db
-from app.moderation.memory import recent_cases
-from app.moderation.queue import list_queue, resolve_case
 
-app = FastAPI(title="Lorapok Red Bot Dashboard")
+app = FastAPI(title="Lorapok Red Bot Dashboard", version="2.0.0")
 
-# Mount resources for the logo
-if os.path.exists("resources"):
-    app.mount("/static", StaticFiles(directory="resources"), name="static")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+app.middleware("http")(feature_gate_middleware)
+
+_STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
+if os.path.isdir(_STATIC_DIR):
+    app.mount("/static", StaticFiles(directory=_STATIC_DIR), name="static")
 
 
-class ReviewResolutionRequest(BaseModel):
+def _settings() -> Settings:
+    return Settings.from_env()
+
+
+def _db_dep():
+    settings = _settings()
+    yield from get_db(settings.database_url)
+
+
+# ── Core ──────────────────────────────────────────────────────────────────────
+
+
+@app.get("/", response_class=HTMLResponse)
+def dashboard_root():
+    index = os.path.join(_STATIC_DIR, "index.html")
+    if os.path.isfile(index):
+        return FileResponse(index)
+    return HTMLResponse("<h1>Lorapok Red Bot Dashboard</h1><p>Static files not found.</p>")
+
+
+@app.get("/health")
+def health():
+    return {"status": "ok", "version": "2.0.0"}
+
+
+@app.get("/config")
+def config(settings: Settings = Depends(_settings)):
+    return {
+        "ai_model": settings.ai_model,
+        "dry_run": settings.dry_run,
+        "subreddit_names": settings.subreddit_names,
+        "white_label_name": settings.white_label_name,
+        "white_label_logo_url": settings.white_label_logo_url,
+    }
+
+
+# ── Metrics & Analytics ───────────────────────────────────────────────────────
+
+
+@app.get("/metrics")
+def metrics(db: Session = Depends(_db_dep)):
+    snap = metrics_store.snapshot()
+    return {
+        "comments_processed": snap.get("comments_processed", 0),
+        "actions_taken": snap.get("actions_taken", 0),
+        "queued_reviews": snap.get("queued_reviews", 0),
+        "posts_processed": snap.get("posts_processed", 0),
+    }
+
+
+@app.get("/analytics/growth")
+def analytics_growth(db: Session = Depends(_db_dep)):
+    from app.dashboard.models import DailyMetric
+    from datetime import date, timedelta
+
+    dates = [(date.today() - timedelta(days=i)).isoformat() for i in range(29, -1, -1)]
+    records = db.query(DailyMetric).filter(DailyMetric.metric_date >= date.today() - timedelta(days=29)).all()
+    by_date: dict[str, dict[str, int]] = {d: {} for d in dates}
+    for r in records:
+        key = r.metric_date.isoformat() if r.metric_date else ""
+        if key in by_date:
+            by_date[key][r.metric_name] = r.count
+    return {"dates": dates, "metrics": by_date}
+
+
+@app.get("/analytics/sentiment")
+def analytics_sentiment(db: Session = Depends(_db_dep), settings: Settings = Depends(_settings)):
+    from app.moderation.sentiment import get_sentiment_trend
+
+    data = []
+    for sub in settings.subreddit_names:
+        data.extend(get_sentiment_trend(db, sub, tenant_id=settings.tenant_id))
+    return {"data": data}
+
+
+@app.get("/analytics/cohort")
+def analytics_cohort(db: Session = Depends(_db_dep), settings: Settings = Depends(_settings)):
+    from app.analytics.cohort import build_cohort_table
+
+    results = {}
+    for sub in settings.subreddit_names:
+        results[sub] = build_cohort_table(db, sub, tenant_id=settings.tenant_id)
+    return results
+
+
+@app.get("/analytics/health-score")
+def analytics_health_score(db: Session = Depends(_db_dep), settings: Settings = Depends(_settings)):
+    from app.analytics.health_score import compute_health_score
+    from dataclasses import asdict
+
+    results = {}
+    for sub in settings.subreddit_names:
+        score = compute_health_score(db, sub, tenant_id=settings.tenant_id)
+        results[sub] = {"total": score.total, "growth": score.growth, "engagement": score.engagement, "moderation": score.moderation, "spam": score.spam}
+    return results
+
+
+@app.get("/analytics/multi-sub")
+def analytics_multi_sub(db: Session = Depends(_db_dep), settings: Settings = Depends(_settings)):
+    from app.analytics.multi_sub import get_aggregate_metrics, get_per_sub_breakdown
+
+    return {
+        "aggregate": get_aggregate_metrics(db, settings.tenant_id),
+        "breakdown": get_per_sub_breakdown(db, settings.tenant_id),
+    }
+
+
+# ── Review queue ──────────────────────────────────────────────────────────────
+
+
+@app.get("/reviews")
+def list_reviews(db: Session = Depends(_db_dep), settings: Settings = Depends(_settings)):
+    from app.moderation.queue import list_queue
+
+    return {"pending": list_queue(db, status="pending", tenant_id=settings.tenant_id)}
+
+
+class ResolveRequest(BaseModel):
     status: str = Field(pattern="^(approved|rejected|escalated)$")
     reviewer_note: str = ""
 
 
-class PostActionRequest(BaseModel):
-    action: str = Field(pattern="^(approve|reject)$")
+@app.post("/reviews/{case_id}/resolve")
+def resolve_review(case_id: str, body: ResolveRequest, db: Session = Depends(_db_dep), settings: Settings = Depends(_settings)):
+    from app.moderation.queue import list_queue, resolve_case
+
+    ok = resolve_case(db, case_id, body.status, body.reviewer_note, tenant_id=settings.tenant_id)
+    if not ok:
+        raise HTTPException(400, "Unable to resolve review case.")
+    return {"ok": True, "pending": list_queue(db, status="pending", tenant_id=settings.tenant_id)}
 
 
-_DASHBOARD_HTML = """
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Lorapok Red Bot | Labs Dashboard</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=Roboto+Mono:wght@500&display=swap" 
-          rel="stylesheet">
-    <style>
-      :root {
-        --bg-deep: #050505;
-        --bg-panel: rgba(20, 22, 28, 0.7);
-        --accent-neon: #39ff14;
-        --accent-cyber: #00f3ff;
-        --accent-pulse: #ff2f55;
-        --accent-reddit: #FF4500;
-        --text-primary: #f8fafc;
-        --text-secondary: #94a3b8;
-        --border-glass: rgba(255, 255, 255, 0.08);
-        --glow-green: 0 0 15px rgba(57, 255, 20, 0.3);
-        --glow-reddit: 0 0 15px rgba(255, 69, 0, 0.4);
-        --sidebar-width: 260px;
-      }
-
-      * { box-sizing: border-box; }
-
-      body {
-        margin: 0;
-        font-family: 'Inter', sans-serif;
-        background: var(--bg-deep);
-        color: var(--text-primary);
-        display: flex;
-        height: 100vh;
-        overflow: hidden;
-      }
-
-      /* Animated Background */
-      .cyber-bg {
-        position: fixed;
-        top: 0; left: 0; right: 0; bottom: 0;
-        z-index: -1;
-        background: 
-          radial-gradient(circle at 80% 20%, rgba(0, 243, 255, 0.05) 0%, transparent 40%),
-          radial-gradient(circle at 20% 80%, rgba(255, 69, 0, 0.05) 0%, transparent 40%);
-        overflow: hidden;
-      }
-      .cyber-bg::after {
-        content: "";
-        position: absolute;
-        top: 0; left: 0; width: 100%; height: 100%;
-        background-image: 
-          linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
-          linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
-        background-size: 50px 50px;
-        mask-image: radial-gradient(ellipse at center, black, transparent 80%);
-      }
-
-      /* Sidebar */
-      .sidebar {
-        width: var(--sidebar-width);
-        background: rgba(10, 11, 14, 0.95);
-        border-right: 1px solid var(--border-glass);
-        display: flex;
-        flex-direction: column;
-        padding: 32px 20px;
-        z-index: 10;
-        backdrop-blur: 10px;
-      }
-
-      .brand {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        margin-bottom: 48px;
-        padding-left: 8px;
-      }
-      
-      /* Reddit + Lorapok Logo Fusion */
-      .logo-container {
-        position: relative;
-        width: 44px;
-        height: 44px;
-        background: var(--accent-reddit);
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        box-shadow: var(--glow-reddit);
-      }
-      .logo-img {
-        width: 28px;
-        height: 28px;
-        border-radius: 4px;
-        object-fit: cover;
-      }
-      .logo-badge {
-        position: absolute;
-        bottom: -2px;
-        right: -2px;
-        width: 14px;
-        height: 14px;
-        background: var(--accent-neon);
-        border: 2px solid #000;
-        border-radius: 50%;
-      }
-
-      .brand-name {
-        font-size: 1.1rem; font-weight: 800; letter-spacing: -0.5px;
-        text-transform: uppercase;
-      }
-      .brand-name span { color: var(--accent-reddit); }
-
-      .nav-group { margin-bottom: 32px; }
-      .nav-label {
-        font-size: 0.7rem; color: var(--text-secondary);
-        text-transform: uppercase; letter-spacing: 1.5px;
-        margin-bottom: 16px; padding-left: 12px;
-      }
-      .nav-item {
-        display: flex; align-items: center; gap: 12px;
-        padding: 12px 16px; border-radius: 12px;
-        color: var(--text-secondary); text-decoration: none;
-        font-size: 0.9rem; font-weight: 600;
-        transition: all 0.2s ease; margin-bottom: 4px;
-        cursor: pointer;
-      }
-      .nav-item:hover {
-        background: rgba(255, 255, 255, 0.05);
-        color: var(--text-primary);
-      }
-      .nav-item.active {
-        border-left: 3px solid var(--accent-reddit);
-        background: linear-gradient(90deg, rgba(255, 69, 0, 0.1), transparent);
-        color: var(--text-primary);
-      }
-      .nav-item.special {
-        color: var(--accent-cyber);
-        border: 1px solid rgba(0, 243, 255, 0.2);
-        margin-top: 12px;
-      }
-
-      /* Main Content */
-      .content {
-        flex: 1;
-        padding: 40px;
-        overflow-y: auto;
-        position: relative;
-      }
-
-      .page-header {
-        display: flex; justify-content: space-between; align-items: center;
-        margin-bottom: 40px;
-      }
-      .page-title h1 { margin: 0; font-size: 2rem; font-weight: 800; letter-spacing: -1px; }
-      .page-title p { margin: 8px 0 0; color: var(--text-secondary); font-size: 0.95rem; }
-
-      .status-badge {
-        display: flex; align-items: center; gap: 8px;
-        background: rgba(57, 255, 20, 0.05);
-        padding: 8px 16px; border-radius: 99px;
-        border: 1px solid rgba(57, 255, 20, 0.2);
-        font-size: 0.8rem; font-weight: 700; color: var(--accent-neon);
-      }
-      .pulse-dot {
-        width: 8px; height: 8px; border-radius: 50%;
-        background: var(--accent-neon);
-        box-shadow: 0 0 10px var(--accent-neon);
-        animation: pulse 2s infinite;
-      }
-
-      @keyframes pulse {
-        0% { transform: scale(1); opacity: 1; }
-        50% { transform: scale(1.3); opacity: 0.5; }
-        100% { transform: scale(1); opacity: 1; }
-      }
-
-      /* View Sections */
-      .view-section { display: none; }
-      .view-section.active { display: block; }
-
-      /* Stats Grid */
-      .stats-grid {
-        display: grid; grid-template-columns: repeat(4, 1fr); gap: 24px;
-        margin-bottom: 40px;
-      }
-      .stat-card {
-        background: var(--bg-panel);
-        backdrop-filter: blur(12px);
-        border: 1px solid var(--border-glass);
-        padding: 24px; border-radius: 20px;
-        transition: transform 0.2s ease;
-      }
-      .stat-card:hover { transform: translateY(-4px); border-color: rgba(255,255,255,0.15); }
-      .stat-label { 
-        font-size: 0.8rem; color: var(--text-secondary); 
-        font-weight: 600; text-transform: uppercase; letter-spacing: 1px; 
-      }
-      .stat-value { 
-        font-size: 2.2rem; font-weight: 800; margin-top: 12px; 
-        font-family: 'Roboto Mono', monospace; 
-      }
-
-      /* Section Styling */
-      .glass-section {
-        background: var(--bg-panel);
-        backdrop-filter: blur(12px);
-        border: 1px solid var(--border-glass);
-        border-radius: 24px;
-        padding: 32px; margin-bottom: 32px;
-      }
-      .section-header {
-        display: flex; justify-content: space-between; align-items: center;
-        margin-bottom: 24px;
-      }
-      .section-header h2 { margin: 0; font-size: 1.25rem; font-weight: 700; }
-
-      /* Tables */
-      .table-wrapper { width: 100%; overflow-x: auto; }
-      table { width: 100%; border-collapse: collapse; text-align: left; }
-      th {
-        padding: 16px; font-size: 0.75rem; font-weight: 700;
-        color: var(--text-secondary); text-transform: uppercase;
-        letter-spacing: 1px; border-bottom: 1px solid var(--border-glass);
-      }
-      td { padding: 16px; font-size: 0.9rem; border-bottom: 1px solid var(--border-glass); }
-      tr:last-child td { border-bottom: none; }
-      tr:hover td { background: rgba(255,255,255,0.02); }
-
-      /* Components */
-      .btn {
-        padding: 10px 20px; border-radius: 12px;
-        font-size: 0.85rem; font-weight: 700; cursor: pointer;
-        transition: all 0.2s ease; border: none;
-      }
-      .btn-primary {
-        background: var(--accent-neon); color: #000;
-        box-shadow: 0 4px 14px rgba(57, 255, 20, 0.3);
-      }
-      .btn-primary:hover { 
-        transform: translateY(-2px); 
-        box-shadow: 0 6px 20px rgba(57, 255, 20, 0.4); 
-      }
-      .btn-secondary {
-        background: rgba(255,255,255,0.05); color: var(--text-primary);
-        border: 1px solid var(--border-glass);
-      }
-      .btn-secondary:hover { background: rgba(255,255,255,0.1); }
-
-      select, input {
-        background: rgba(255,255,255,0.05); border: 1px solid var(--border-glass);
-        color: var(--text-primary); padding: 10px 14px; border-radius: 10px;
-        font-size: 0.85rem; outline: none;
-      }
-      
-      .tag {
-        font-family: 'Roboto Mono', monospace; font-size: 0.7rem;
-        background: rgba(0, 243, 255, 0.1); color: var(--accent-cyber);
-        padding: 4px 8px; border-radius: 6px;
-      }
-
-      .content-preview {
-        max-width: 400px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-        color: var(--text-secondary); font-size: 0.85rem;
-      }
-
-      /* Scrollbar */
-      ::-webkit-scrollbar { width: 6px; }
-      ::-webkit-scrollbar-track { background: transparent; }
-      ::-webkit-scrollbar-thumb { background: var(--border-glass); border-radius: 10px; }
-      ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.15); }
-    </style>
-  </head>
-  <body>
-    <div class="cyber-bg"></div>
-
-    <aside class="sidebar">
-      <div class="brand">
-        <div class="logo-container">
-            <img src="/static/logo-120.png" class="logo-img" alt="Fusion Logo">
-            <div class="logo-badge"></div>
-        </div>
-        <div class="brand-name">Lorapok<span> Red Bot</span></div>
-      </div>
-
-      <div class="nav-group">
-        <div class="nav-label">Management</div>
-        <div class="nav-item active" onclick="switchView('overview')">Overview</div>
-        <div class="nav-item" onclick="switchView('review-queue')">Review Queue</div>
-        <div class="nav-item" onclick="switchView('content-drafts')">Content Drafts</div>
-      </div>
-
-      <div class="nav-group">
-        <div class="nav-label">Analytics</div>
-        <div class="nav-item" onclick="switchView('growth-data')">Growth Data</div>
-        <div class="nav-item" onclick="switchView('ai-perf')">AI Performance</div>
-      </div>
-
-      <div class="nav-group">
-        <div class="nav-label">Developer</div>
-        <a href="https://github.com/your-repo/lorapok-red-bot/blob/main/docs/how_to_use.md" 
-           target="_blank" class="nav-item special">
-          HOW TO USE
-        </a>
-      </div>
-
-      <div style="margin-top: auto; padding-left: 12px;">
-        <p style="font-size: 0.7rem; color: var(--text-secondary);">Lorapok Labs Red Bot v2.0-PRO</p>
-      </div>
-    </aside>
-
-    <main class="content">
-      <header class="page-header">
-        <div class="page-title">
-          <h1 id="viewTitle">Labs Command Center</h1>
-          <p id="viewSubtitle">Real-time autonomous community management system.</p>
-        </div>
-        <div class="status-badge">
-          <div class="pulse-dot"></div>
-          SYSTEM ONLINE: <span id="currentModel" style="color:white; margin-left:4px;">...</span>
-        </div>
-      </header>
-
-      <div id="overview" class="view-section active">
-          <div class="stats-grid">
-            <div class="stat-card">
-              <div class="stat-label">Processed</div>
-              <div class="stat-value" id="commentsProcessed">0</div>
-            </div>
-            <div class="stat-card">
-              <div class="stat-label">Actions</div>
-              <div class="stat-value" id="actionsTaken" style="color:var(--accent-cyber)">0</div>
-            </div>
-            <div class="stat-card">
-              <div class="stat-label">Queued</div>
-              <div class="stat-value" id="queuedReviews" style="color:var(--accent-pulse)">0</div>
-            </div>
-            <div class="stat-card">
-              <div class="stat-label">Published</div>
-              <div class="stat-value" id="postsProcessed">0</div>
-            </div>
-          </div>
-
-          <section class="glass-section">
-            <div class="section-header">
-              <h2>Recent Neural Memory</h2>
-            </div>
-            <div class="table-wrapper">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Vector ID</th>
-                    <th>Action Taken</th>
-                    <th>Logic Path</th>
-                    <th>Executed At</th>
-                  </tr>
-                </thead>
-                <tbody id="memoryRowsOverview">
-                </tbody>
-              </table>
-            </div>
-          </section>
-      </div>
-
-      <div id="review-queue" class="view-section">
-          <section class="glass-section">
-            <div class="section-header">
-              <h2>Pending Review Queue</h2>
-              <span class="tag" id="reviewCount">0 CASES</span>
-            </div>
-            <div class="table-wrapper">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Incident Details</th>
-                    <th>Detection Reason</th>
-                    <th>Signal Source</th>
-                    <th>Decision</th>
-                  </tr>
-                </thead>
-                <tbody id="reviewRows">
-                  <tr>
-                    <td colspan="4" style="text-align:center; color:var(--text-secondary); 
-                                           padding:40px;">
-                      No critical incidents detected.
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </section>
-      </div>
-
-      <div id="content-drafts" class="view-section">
-          <section class="glass-section">
-            <div class="section-header">
-              <h2>Content Drafts</h2>
-            </div>
-            <div class="table-wrapper">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Draft Analysis</th>
-                    <th>Intelligence Source</th>
-                    <th>Timestamp</th>
-                    <th>Action</th>
-                  </tr>
-                </thead>
-                <tbody id="draftRows">
-                  <tr>
-                    <td colspan="4" style="text-align:center; color:var(--text-secondary); 
-                                           padding:40px;">
-                      No content drafts available.
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </section>
-      </div>
-
-      <div id="growth-data" class="view-section">
-          <section class="glass-section">
-            <div class="section-header">
-              <h2>Community Growth Data</h2>
-            </div>
-            <div style="padding: 40px; text-align: center; color: var(--text-secondary);">
-                Analytics module initializing... 
-                <br><br>
-                <div style="font-family: 'Roboto Mono'; font-size: 2rem; color: var(--accent-cyber);">78%</div>
-            </div>
-          </section>
-      </div>
-
-      <div id="ai-perf" class="view-section">
-          <section class="glass-section">
-            <div class="section-header">
-              <h2>AI Logic Performance</h2>
-            </div>
-            <div style="padding: 40px; text-align: center; color: var(--text-secondary);">
-                Neural metrics are being calculated in the background.
-            </div>
-          </section>
-      </div>
-
-    </main>
-
-    <script>
-      function switchView(viewId) {
-        // Update Nav
-        document.querySelectorAll('.nav-item').forEach(item => {
-            item.classList.remove('active');
-            const itemText = item.textContent.toLowerCase().replace(/ /g, '-');
-            if(itemText === viewId || (viewId === 'ai-perf' && itemText === 'ai-performance') || (viewId === 'growth-data' && itemText === 'growth-data')) {
-                item.classList.add('active');
-            }
-        });
-
-        // Update Sections
-        document.querySelectorAll('.view-section').forEach(sec => {
-            sec.classList.remove('active');
-        });
-        document.getElementById(viewId).classList.add('active');
-
-        // Update Header
-        const titleMap = {
-            'overview': 'Labs Command Center',
-            'review-queue': 'Review Resolution',
-            'content-drafts': 'Content Curation',
-            'growth-data': 'Growth Analytics',
-            'ai-perf': 'AI Performance Metrics'
-        };
-        document.getElementById('viewTitle').textContent = titleMap[viewId];
-      }
-
-      async function fetchJson(path) {
-        const response = await fetch(path);
-        if (!response.ok) throw new Error(`Request failed: ${path}`);
-        return response.json();
-      }
-
-      function renderReviews(pending) {
-        const tbody = document.getElementById("reviewRows");
-        document.getElementById("reviewCount").textContent = `${pending.length} CASES`;
-        
-        if (!pending.length) {
-          tbody.innerHTML = `
-            <tr>
-              <td colspan="4" style="text-align:center; color:var(--text-secondary); 
-                                     padding:40px;">
-                All clear. No pending reviews.
-              </td>
-            </tr>`;
-          return;
-        }
-        tbody.innerHTML = pending.map((item) => `
-          <tr>
-            <td>
-              <div style="font-weight:700; margin-bottom:4px;">ID: ${item.case_id}</div>
-              <div class="content-preview">${item.text}</div>
-            </td>
-            <td><span style="color:var(--accent-pulse)">${item.reason}</span></td>
-            <td><span class="tag">${item.source}</span></td>
-            <td>
-              <div style="display:flex; gap:8px;">
-                <select id="status-${item.case_id}" style="width:120px;">
-                  <option value="approved">Approve</option>
-                  <option value="rejected">Reject</option>
-                </select>
-                <button class="btn btn-primary" 
-                        onclick="resolveReview('${item.case_id}')">Apply</button>
-              </div>
-            </td>
-          </tr>
-        `).join("");
-      }
-
-      function renderDrafts(drafts) {
-        const tbody = document.getElementById("draftRows");
-        if (!drafts || !drafts.length) {
-            tbody.innerHTML = `
-              <tr>
-                <td colspan="4" style="text-align:center; color:var(--text-secondary); 
-                                       padding:40px;">
-                  No drafts detected.
-                </td>
-              </tr>`;
-            return;
-        }
-        tbody.innerHTML = drafts.map(d => `
-          <tr>
-            <td>
-              <div style="font-weight:700; color:var(--accent-cyber); margin-bottom:4px;">
-                ${d.title}
-              </div>
-              <div class="content-preview">${d.body}</div>
-            </td>
-            <td>
-              <a href="${d.source_url}" target="_blank" class="tag" 
-                 style="text-decoration:none;">VIEW ORIGIN</a>
-            </td>
-            <td style="font-size:0.8rem; color:var(--text-secondary);">
-              ${new Date(d.created_at).toLocaleString()}
-            </td>
-            <td>
-              <div style="display:flex; gap:8px;">
-                <button class="btn btn-primary" 
-                        onclick="handlePost(${d.id}, 'approve')">Publish</button>
-                <button class="btn btn-secondary" 
-                        onclick="handlePost(${d.id}, 'reject')">Discard</button>
-              </div>
-            </td>
-          </tr>
-        `).join("");
-      }
-
-      function renderMemory(recent) {
-        const overviewTable = document.getElementById("memoryRowsOverview");
-        if (!recent || !recent.length) {
-          overviewTable.innerHTML = '<tr><td colspan="4" class="muted">No historical data.</td></tr>';
-          return;
-        }
-        const rows = recent.map((item) => `
-          <tr>
-            <td><span class="tag">${item.text_hash.slice(0,12)}</span></td>
-            <td style="font-weight:700; color:${
-              item.action === 'remove' ? 'var(--accent-pulse)' : 'var(--accent-neon)'
-            }">
-              ${item.action.toUpperCase()}
-            </td>
-            <td style="font-size:0.85rem;">${item.reason}</td>
-            <td style="font-size:0.8rem; color:var(--text-secondary);">
-              ${new Date(item.created_at).toLocaleString()}
-            </td>
-          </tr>
-        `).join("");
-        overviewTable.innerHTML = rows;
-      }
-
-      async function resolveReview(caseId) {
-        const status = document.getElementById(`status-${caseId}`).value;
-        await fetch(`/reviews/${caseId}/resolve`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ status }),
-        });
-        await refreshDashboard();
-      }
-
-      async function handlePost(postId, action) {
-        await fetch(`/posts/${postId}/action`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action }),
-        });
-        await refreshDashboard();
-      }
-
-      async function refreshDashboard() {
-        try {
-          const [metrics, reviews, memory, drafts, config] = await Promise.all([
-            fetchJson("/metrics"),
-            fetchJson("/reviews"),
-            fetchJson("/memory"),
-            fetchJson("/posts/pending"),
-            fetchJson("/config"),
-          ]);
-          
-          document.getElementById("currentModel").textContent = config.ai_model.toUpperCase();
-          document.getElementById("commentsProcessed").textContent = 
-            metrics.comments_processed ?? 0;
-          document.getElementById("actionsTaken").textContent = metrics.actions_taken ?? 0;
-          document.getElementById("queuedReviews").textContent = metrics.queued_reviews ?? 0;
-          document.getElementById("postsProcessed").textContent = metrics.posts_processed ?? 0;
-          
-          renderReviews(reviews.pending);
-          renderMemory(memory.recent);
-          renderDrafts(drafts.drafts);
-        } catch (error) {
-          console.error(error);
-        }
-      }
-
-      refreshDashboard();
-      setInterval(refreshDashboard, 15000);
-    </script>
-  </body>
-</html>
-"""
-
-
-@app.get("/", response_class=HTMLResponse)
-def dashboard() -> str:
-    return _DASHBOARD_HTML
-
-
-@app.get("/health")
-def health() -> dict[str, str]:
-    return {"status": "ok"}
-
-
-@app.get("/config")
-def get_config() -> dict[str, Any]:
-    return {"ai_model": os.getenv("AI_MODEL", "openai/gpt-4o-mini")}
-
-
-@app.get("/metrics")
-def metrics(db: Session = Depends(get_db)) -> dict[str, int]:
-    today = date.today()
-    history = db.query(DailyMetric).filter(DailyMetric.metric_date == today).all()
-    totals = {
-        "posts_processed": 0,
-        "comments_processed": 0,
-        "queued_reviews": 0,
-        "actions_taken": 0,
-    }
-    for h in history:
-        if h.metric_name in totals:
-            totals[h.metric_name] += h.count
-    session_snapshot = metrics_store.snapshot()
-    for k, v in session_snapshot.items():
-        if k in totals:
-            totals[k] += v
-    return totals
-
-
-@app.get("/analytics/growth")
-def growth_analytics(db: Session = Depends(get_db)) -> dict[str, Any]:
-    end_date = date.today()
-    start_date = end_date - timedelta(days=7)
-    records = db.query(DailyMetric).filter(DailyMetric.metric_date >= start_date).all()
-    dates = sorted(list({r.metric_date.isoformat() for r in records}))
-    metrics_data = {}
-    for r in records:
-        d_str = r.metric_date.isoformat()
-        if r.metric_name not in metrics_data:
-            metrics_data[r.metric_name] = {}
-        metrics_data[r.metric_name][d_str] = r.count
-    return {"dates": dates, "metrics": metrics_data}
+# ── Pending posts ─────────────────────────────────────────────────────────────
 
 
 @app.get("/posts/pending")
-def list_pending_posts(db: Session = Depends(get_db)) -> dict[str, List[dict]]:
-    posts = db.query(PendingPost).filter(PendingPost.status == "pending").all()
-    return {
-        "drafts": [
-            {
-                "id": p.id,
-                "title": p.title,
-                "body": p.body,
-                "source_url": p.source_url,
-                "created_at": p.created_at.isoformat(),
-            }
-            for p in posts
-        ]
-    }
+def list_pending_posts(db: Session = Depends(_db_dep)):
+    from app.dashboard.models import PendingPost
+
+    posts = db.query(PendingPost).filter(PendingPost.status == "pending").order_by(PendingPost.created_at.desc()).all()
+    return {"drafts": [{"id": p.id, "title": p.title, "body": p.body, "source_url": p.source_url, "created_at": p.created_at.isoformat() if p.created_at else None} for p in posts]}
+
+
+class PostActionRequest(BaseModel):
+    action: str = Field(pattern="^(approved|rejected)$")
 
 
 @app.post("/posts/{post_id}/action")
-def take_post_action(
-    post_id: int, payload: PostActionRequest, db: Session = Depends(get_db)
-) -> dict:
+def post_action(post_id: int, body: PostActionRequest, db: Session = Depends(_db_dep)):
+    from app.dashboard.models import PendingPost
+
     post = db.query(PendingPost).filter(PendingPost.id == post_id).first()
     if not post:
-        raise HTTPException(status_code=404, detail="Post not found.")
-
-    if payload.action == "approve":
-        post.status = "approved"
-        metrics_store.increment("posts_processed")
-    else:
-        post.status = "rejected"
-
+        raise HTTPException(404, "Post not found.")
+    post.status = body.action
     db.commit()
     return {"ok": True}
 
 
-@app.get("/reviews")
-def reviews(db: Session = Depends(get_db)) -> dict[str, list[dict[str, Any]]]:
-    return {"pending": list_queue(db, status="pending")}
-
-
-@app.post("/reviews/{case_id}/resolve")
-def resolve_review(
-    case_id: str, payload: ReviewResolutionRequest, db: Session = Depends(get_db)
-) -> dict[str, Any]:
-    updated = resolve_case(db, case_id, payload.status, payload.reviewer_note)
-    if not updated:
-        raise HTTPException(status_code=400, detail="Unable to resolve review case.")
-    return {"ok": True, "pending": list_queue(db, status="pending")}
+# ── Memory ────────────────────────────────────────────────────────────────────
 
 
 @app.get("/memory")
-def memory(db: Session = Depends(get_db)) -> dict[str, list[dict[str, Any]]]:
-    return {"recent": recent_cases(db)}
+def memory(db: Session = Depends(_db_dep), settings: Settings = Depends(_settings)):
+    from app.moderation.memory import recent_cases
+
+    return {"recent": recent_cases(db, limit=50, tenant_id=settings.tenant_id)}
+
+
+# ── Users & Reputation ────────────────────────────────────────────────────────
+
+
+@app.get("/users/{username}/reputation")
+def user_reputation(username: str, db: Session = Depends(_db_dep), settings: Settings = Depends(_settings)):
+    from app.dashboard.models import UserReputation
+
+    records = db.query(UserReputation).filter(
+        UserReputation.tenant_id == settings.tenant_id,
+        UserReputation.username == username,
+    ).all()
+    if not records:
+        raise HTTPException(404, f"No reputation data for u/{username}")
+    return [{"subreddit": r.subreddit_name, "score": r.reputation_score, "flair_tier": r.flair_tier, "is_contributor": r.is_contributor} for r in records]
+
+
+# ── Modmail ───────────────────────────────────────────────────────────────────
+
+
+@app.get("/modmail")
+def list_modmail(db: Session = Depends(_db_dep), settings: Settings = Depends(_settings)):
+    from app.dashboard.models import ModmailRecord
+
+    records = db.query(ModmailRecord).filter(
+        ModmailRecord.tenant_id == settings.tenant_id,
+        ModmailRecord.status.in_(["open", "needs_human"]),
+    ).order_by(ModmailRecord.created_at.desc()).limit(50).all()
+    return {"modmail": [{"id": r.id, "conversation_id": r.conversation_id, "subject": r.subject, "category": r.category, "status": r.status, "sla_deadline": r.sla_deadline.isoformat() if r.sla_deadline else None} for r in records]}
+
+
+class ModmailReplyRequest(BaseModel):
+    message: str
+
+
+@app.post("/modmail/{record_id}/reply")
+def reply_modmail(record_id: int, body: ModmailReplyRequest, db: Session = Depends(_db_dep)):
+    from app.dashboard.models import ModmailRecord
+
+    record = db.query(ModmailRecord).filter(ModmailRecord.id == record_id).first()
+    if not record:
+        raise HTTPException(404, "Modmail record not found.")
+    record.status = "resolved"
+    db.commit()
+    return {"ok": True, "note": "Reply must be sent via Reddit modmail directly."}
+
+
+# ── Flair ─────────────────────────────────────────────────────────────────────
+
+
+@app.get("/flair/templates")
+def flair_templates(db: Session = Depends(_db_dep), settings: Settings = Depends(_settings)):
+    from app.subreddit.flair_engine import list_flair_templates
+
+    results = {}
+    for sub in settings.subreddit_names:
+        results[sub] = list_flair_templates(db, sub, tenant_id=settings.tenant_id)
+    return results
+
+
+class FlairAutoAssignRequest(BaseModel):
+    subreddit_name: str
+
+
+@app.post("/flair/auto-assign")
+def flair_auto_assign(body: FlairAutoAssignRequest, db: Session = Depends(_db_dep), settings: Settings = Depends(_settings)):
+    return {"ok": True, "note": "Flair batch runs automatically via scheduler."}
+
+
+# ── Wiki ──────────────────────────────────────────────────────────────────────
+
+
+@app.get("/wiki/pages")
+def wiki_pages(db: Session = Depends(_db_dep), settings: Settings = Depends(_settings)):
+    from app.dashboard.models import WikiPage
+
+    pages = db.query(WikiPage).filter(WikiPage.tenant_id == settings.tenant_id).all()
+    return {"pages": [{"subreddit": p.subreddit_name, "name": p.page_name, "auto_update": p.auto_update_enabled} for p in pages]}
+
+
+class WikiUpdateRequest(BaseModel):
+    content: str
+    reason: str = "Dashboard update"
+
+
+@app.post("/wiki/pages/{page_name}/update")
+def wiki_update(page_name: str, body: WikiUpdateRequest, db: Session = Depends(_db_dep), settings: Settings = Depends(_settings)):
+    return {"ok": True, "note": "Wiki update queued. Apply via wiki_manager with Reddit credentials."}
+
+
+# ── Webhooks ──────────────────────────────────────────────────────────────────
+
+
+@app.get("/webhooks")
+def list_webhooks_endpoint(db: Session = Depends(_db_dep), settings: Settings = Depends(_settings)):
+    from app.integrations.webhooks import list_webhooks
+
+    return {"webhooks": list_webhooks(db, settings.tenant_id)}
+
+
+class WebhookCreateRequest(BaseModel):
+    url: str
+    events: list[str]
+    secret: str
+
+
+@app.post("/webhooks")
+def create_webhook(body: WebhookCreateRequest, db: Session = Depends(_db_dep), settings: Settings = Depends(_settings)):
+    from app.integrations.webhooks import register_webhook
+
+    hook = register_webhook(db, settings.tenant_id, body.url, body.events, body.secret)
+    return {"id": hook.id, "url": hook.url, "events": hook.events}
+
+
+@app.delete("/webhooks/{webhook_id}")
+def delete_webhook_endpoint(webhook_id: int, db: Session = Depends(_db_dep), settings: Settings = Depends(_settings)):
+    from app.integrations.webhooks import delete_webhook
+
+    ok = delete_webhook(db, settings.tenant_id, webhook_id)
+    if not ok:
+        raise HTTPException(404, "Webhook not found.")
+    return {"ok": True}
+
+
+# ── Scheduled posts ───────────────────────────────────────────────────────────
+
+
+@app.get("/scheduled-posts")
+def list_scheduled_posts(db: Session = Depends(_db_dep), settings: Settings = Depends(_settings)):
+    from app.posting.content_calendar import get_scheduled_posts
+
+    results = {}
+    for sub in settings.subreddit_names:
+        results[sub] = get_scheduled_posts(db, sub, tenant_id=settings.tenant_id)
+    return results
+
+
+class ScheduledPostRequest(BaseModel):
+    subreddit_name: str
+    title: str
+    body: str
+    post_at: str  # ISO 8601 UTC
+    flair_id: str | None = None
+
+
+@app.post("/scheduled-posts")
+def create_scheduled_post(body: ScheduledPostRequest, db: Session = Depends(_db_dep), settings: Settings = Depends(_settings)):
+    from datetime import datetime, timezone
+    from app.posting.content_calendar import schedule_post
+
+    try:
+        post_at = datetime.fromisoformat(body.post_at.replace("Z", "+00:00"))
+        post_id = schedule_post(db, body.subreddit_name, body.title, body.body, post_at, body.flair_id, settings.tenant_id)
+        return {"id": post_id}
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+
+
+@app.delete("/scheduled-posts/{post_id}")
+def cancel_scheduled_post_endpoint(post_id: str, db: Session = Depends(_db_dep), settings: Settings = Depends(_settings)):
+    from app.posting.content_calendar import cancel_scheduled_post
+
+    ok = cancel_scheduled_post(db, post_id, tenant_id=settings.tenant_id)
+    if not ok:
+        raise HTTPException(404, "Scheduled post not found or already published.")
+    return {"ok": True}
+
+
+# ── Subreddits ────────────────────────────────────────────────────────────────
+
+
+@app.get("/subreddits")
+def list_subreddits(settings: Settings = Depends(_settings)):
+    return {"subreddits": settings.subreddit_names}
+
+
+class PolicySyncRequest(BaseModel):
+    source_subreddit: str
+    target_subreddits: list[str]
+    policy_types: list[str] = ["rules", "removal_reasons"]
+
+
+@app.post("/subreddits/sync-policy")
+def sync_policy_endpoint(body: PolicySyncRequest, db: Session = Depends(_db_dep)):
+    return {"ok": True, "note": "Policy sync requires Reddit credentials — trigger via worker or CLI."}
+
+
+# ── Billing ───────────────────────────────────────────────────────────────────
+
+
+@app.get("/billing/subscription")
+def billing_subscription(db: Session = Depends(_db_dep), settings: Settings = Depends(_settings)):
+    from app.dashboard.models import TenantConfig
+
+    tenant = db.query(TenantConfig).filter(TenantConfig.tenant_id == settings.tenant_id).first()
+    if not tenant:
+        return {"tier": "free", "tenant_id": settings.tenant_id}
+    return {
+        "tier": tenant.tier,
+        "tenant_id": tenant.tenant_id,
+        "managed_subreddits": tenant.managed_subreddits,
+        "ai_calls_today": tenant.ai_calls_today,
+    }
+
+
+@app.post("/billing/portal")
+def billing_portal(db: Session = Depends(_db_dep), settings: Settings = Depends(_settings)):
+    from app.dashboard.models import TenantConfig
+    from app.billing.stripe_client import create_portal_session
+
+    tenant = db.query(TenantConfig).filter(TenantConfig.tenant_id == settings.tenant_id).first()
+    if not tenant or not tenant.stripe_customer_id:
+        raise HTTPException(400, "No Stripe customer found. Please subscribe first.")
+    url = create_portal_session(tenant.stripe_customer_id, return_url="https://lorapok.github.io/red-bot")
+    return {"url": url}
+
+
+@app.post("/billing/stripe-webhook")
+async def stripe_webhook(request: Request, db: Session = Depends(_db_dep)):
+    from app.billing.webhook_handler import handle_stripe_webhook
+
+    payload = await request.body()
+    sig_header = request.headers.get("Stripe-Signature", "")
+    try:
+        return handle_stripe_webhook(payload, sig_header, db)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))

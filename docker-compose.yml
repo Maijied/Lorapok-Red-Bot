@@ -1,41 +1,67 @@
+version: "3.9"
+
 services:
-  bot:
-    build: .
-    command: python -m app.main
-    env_file:
-      - .env
-    depends_on:
-      - postgres
-      - redis
-    restart: unless-stopped
-  dashboard:
-    build: .
-    command: uvicorn app.dashboard.api:app --host 0.0.0.0 --port 8000
-    env_file:
-      - .env
-    ports:
-      - "8000:8000"
-    depends_on:
-      - postgres
-      - redis
-    restart: unless-stopped
   postgres:
-    image: postgres:16
+    image: postgres:16-alpine
     environment:
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: pass
       POSTGRES_DB: lorapok_red_bot
-    ports:
-      - "5432:5432"
+      POSTGRES_USER: lorapok
+      POSTGRES_PASSWORD: lorapok_dev
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lorapok -d lorapok_red_bot"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    ports:
+      - "5432:5432"
+
   redis:
-    image: redis:7
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
     ports:
       - "6379:6379"
-    volumes:
-      - redis_data:/data
+
+  bot:
+    build: .
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://lorapok:lorapok_dev@postgres:5432/lorapok_red_bot
+      REDIS_URL: redis://redis:6379/0
+      DRY_RUN: "true"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  dashboard:
+    build: .
+    env_file: .env
+    environment:
+      COMMAND: dashboard
+      DATABASE_URL: postgresql://lorapok:lorapok_dev@postgres:5432/lorapok_red_bot
+      REDIS_URL: redis://redis:6379/0
+      DRY_RUN: "true"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
 volumes:
   postgres_data:
-  redis_data:

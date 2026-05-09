@@ -3,6 +3,8 @@
 env/
 venv/
 .env
+.env.local
+.env.*.local
 
 # Python
 __pycache__/
@@ -42,8 +44,12 @@ coverage.xml
 
 # Databases
 *.sqlite3
+*.db
 postgres_data/
 redis_data/
+
+# Alembic
+alembic/versions/__pycache__/
 
 # IDEs
 .vscode/
@@ -54,3 +60,20 @@ redis_data/
 # OS
 .DS_Store
 Thumbs.db
+
+# Deployment artefacts
+fly.toml.bak
+*.tfstate
+*.tfstate.backup
+
+# Node (website tooling, if added later)
+node_modules/
+dist/
+.next/
+
+# Stripe CLI
+.stripe/
+
+# Coverage
+htmlcov/
+.coverage.*

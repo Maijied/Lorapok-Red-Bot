@@ -1,0 +1,47 @@
+services:
+  - type: worker
+    name: lorapok-worker
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: DRY_RUN
+        value: "false"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: lorapok-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          name: lorapok-redis
+          type: redis
+          property: connectionString
+
+  - type: web
+    name: lorapok-dashboard
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: COMMAND
+        value: dashboard
+      - key: DRY_RUN
+        value: "false"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: lorapok-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          name: lorapok-redis
+          type: redis
+          property: connectionString
+    healthCheckPath: /health
+
+databases:
+  - name: lorapok-db
+    databaseName: lorapok_red_bot
+    plan: free
+
+services:
+  - type: redis
+    name: lorapok-redis
+    plan: free

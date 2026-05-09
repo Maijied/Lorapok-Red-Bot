@@ -1,0 +1,40 @@
+# Lorapok Red Bot — moderation rule configuration.
+# Edit this file to update keyword and regex rules without changing Python code.
+# Changes take effect on the next bot restart.
+
+# Hard-spam terms: any match → action=remove, confidence=0.95
+hard_spam_terms:
+  - "free money"
+  - "buy now"
+  - "crypto pump"
+  - "visit my site"
+  - "click here to earn"
+  - "guaranteed returns"
+  - "make money fast"
+  - "investment opportunity"
+  - "dm me for details"
+  - "limited time offer"
+
+# Ambiguous terms: any match (no hard-spam) → action=review, confidence=0.55
+ambiguous_terms:
+  - "telegram group"
+  - "discord server"
+  - "referral link"
+  - "affiliate"
+  - "promo code"
+  - "giveaway"
+  - "upvote this"
+  - "check my profile"
+
+# Regex patterns applied after keyword checks.
+# Each entry has a pattern and the action to take on match.
+# action must be one of: remove, review
+regex_rules:
+  - pattern: "(?i)\\b(earn|make)\\s+\\$?\\d+\\s+(per|a)\\s+(day|week|month)\\b"
+    action: "remove"
+    reason: "Earnings claim pattern detected."
+    confidence: 0.90
+  - pattern: "(?i)\\b(bit\\.ly|tinyurl\\.com|t\\.co)/\\S+"
+    action: "review"
+    reason: "Shortened URL detected — may be spam."
+    confidence: 0.60

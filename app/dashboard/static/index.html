@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Lorapok Red Bot — Dashboard</title>
+  <style>
+    :root {
+      --bg-deep: #050505;
+      --bg-panel: rgba(20, 22, 28, 0.75);
+      --accent-neon: #39ff14;
+      --accent-cyber: #00f3ff;
+      --accent-pulse: #ff2f55;
+      --accent-reddit: #FF4500;
+      --text-primary: #f8fafc;
+      --text-secondary: #94a3b8;
+      --border-glass: rgba(255,255,255,0.08);
+      --glow-green: 0 0 15px rgba(57,255,20,0.3);
+      --glow-reddit: 0 0 15px rgba(255,69,0,0.4);
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg-deep);
+      color: var(--text-primary);
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      min-height: 100vh;
+      background-image: radial-gradient(ellipse at 20% 20%, rgba(57,255,20,0.04) 0%, transparent 60%),
+                        radial-gradient(ellipse at 80% 80%, rgba(255,69,0,0.04) 0%, transparent 60%);
+    }
+    nav {
+      display: flex; align-items: center; gap: 1.5rem;
+      padding: 1rem 2rem;
+      background: var(--bg-panel);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border-glass);
+      position: sticky; top: 0; z-index: 100;
+    }
+    .nav-brand { font-size: 1.1rem; font-weight: 700; color: var(--accent-neon); letter-spacing: 0.05em; }
+    .nav-brand span { color: var(--accent-reddit); }
+    nav a { color: var(--text-secondary); text-decoration: none; font-size: 0.875rem; transition: color 0.2s; }
+    nav a:hover { color: var(--accent-neon); }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent-neon); box-shadow: var(--glow-green); animation: pulse 2s infinite; margin-left: auto; }
+    @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:0.4;} }
+    main { max-width: 1200px; margin: 0 auto; padding: 2rem; }
+    h1 { font-size: 1.5rem; font-weight: 700; margin-bottom: 1.5rem; }
+    h2 { font-size: 1rem; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 1rem; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
+    .card {
+      background: var(--bg-panel);
+      border: 1px solid var(--border-glass);
+      border-radius: 12px;
+      padding: 1.25rem;
+      backdrop-filter: blur(12px);
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .card:hover { transform: translateY(-4px); box-shadow: var(--glow-green); }
+    .card-label { font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.5rem; }
+    .card-value { font-size: 2rem; font-weight: 700; color: var(--accent-neon); }
+    .card-value.reddit { color: var(--accent-reddit); }
+    .card-value.cyber { color: var(--accent-cyber); }
+    .section { margin-bottom: 2.5rem; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+    th { text-align: left; padding: 0.75rem 1rem; color: var(--text-secondary); font-weight: 500; border-bottom: 1px solid var(--border-glass); }
+    td { padding: 0.75rem 1rem; border-bottom: 1px solid rgba(255,255,255,0.04); }
+    tr:hover td { background: rgba(255,255,255,0.02); }
+    .badge { display: inline-block; padding: 0.2rem 0.6rem; border-radius: 999px; font-size: 0.7rem; font-weight: 600; }
+    .badge-pending { background: rgba(255,165,0,0.15); color: #ffa500; }
+    .badge-approved { background: rgba(57,255,20,0.15); color: var(--accent-neon); }
+    .badge-rejected { background: rgba(255,47,85,0.15); color: var(--accent-pulse); }
+    .badge-remove { background: rgba(255,47,85,0.15); color: var(--accent-pulse); }
+    .badge-allow { background: rgba(57,255,20,0.15); color: var(--accent-neon); }
+    .badge-review { background: rgba(0,243,255,0.15); color: var(--accent-cyber); }
+    button {
+      background: var(--accent-reddit); color: #fff; border: none; border-radius: 8px;
+      padding: 0.4rem 1rem; font-size: 0.8rem; cursor: pointer; transition: opacity 0.2s;
+    }
+    button:hover { opacity: 0.85; }
+    button.secondary { background: transparent; border: 1px solid var(--border-glass); color: var(--text-secondary); }
+    button.secondary:hover { border-color: var(--accent-neon); color: var(--accent-neon); }
+    .empty { color: var(--text-secondary); font-size: 0.875rem; padding: 1rem 0; }
+    #error-banner { display: none; background: rgba(255,47,85,0.1); border: 1px solid var(--accent-pulse); border-radius: 8px; padding: 0.75rem 1rem; margin-bottom: 1rem; color: var(--accent-pulse); font-size: 0.875rem; }
+  </style>
+</head>
+<body>
+  <nav>
+    <span class="nav-brand" id="nav-brand">Lorapok <span>Red Bot</span></span>
+    <a href="#metrics" aria-label="Metrics">Metrics</a>
+    <a href="#queue" aria-label="Review Queue">Queue</a>
+    <a href="#memory" aria-label="Decision Memory">Memory</a>
+    <a href="#modmail" aria-label="Modmail">Modmail</a>
+    <a href="#scheduled" aria-label="Scheduled Posts">Scheduled</a>
+    <a href="#billing" aria-label="Billing">Billing</a>
+    <div class="status-dot" id="status-dot" title="Bot status"></div>
+  </nav>
+
+  <main>
+    <div id="error-banner" role="alert"></div>
+
+    <section class="section" id="metrics">
+      <h2>Live Metrics</h2>
+      <div class="grid" id="metrics-grid">
+        <div class="card"><div class="card-label">Comments Processed</div><div class="card-value" id="m-comments">—</div></div>
+        <div class="card"><div class="card-label">Actions Taken</div><div class="card-value reddit" id="m-actions">—</div></div>
+        <div class="card"><div class="card-label">Queued Reviews</div><div class="card-value cyber" id="m-queued">—</div></div>
+        <div class="card"><div class="card-label">Posts Published</div><div class="card-value" id="m-posts">—</div></div>
+      </div>
+    </section>
+
+    <section class="section" id="queue">
+      <h2>Review Queue</h2>
+      <div id="queue-container"><p class="empty">Loading…</p></div>
+    </section>
+
+    <section class="section" id="memory">
+      <h2>Decision Memory</h2>
+      <div id="memory-container"><p class="empty">Loading…</p></div>
+    </section>
+
+    <section class="section" id="modmail">
+      <h2>Modmail</h2>
+      <div id="modmail-container"><p class="empty">Loading…</p></div>
+    </section>
+
+    <section class="section" id="scheduled">
+      <h2>Scheduled Posts</h2>
+      <div id="scheduled-container"><p class="empty">Loading…</p></div>
+    </section>
+
+    <section class="section" id="billing">
+      <h2>Subscription</h2>
+      <div id="billing-container"><p class="empty">Loading…</p></div>
+    </section>
+  </main>
+
+  <script>
+    const API = '';
+
+    async function apiFetch(path) {
+      const r = await fetch(API + path);
+      if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
+      return r.json();
+    }
+
+    function showError(msg) {
+      const b = document.getElementById('error-banner');
+      b.textContent = msg;
+      b.style.display = 'block';
+    }
+
+    function badge(status) {
+      return `<span class="badge badge-${status}">${status}</span>`;
+    }
+
+    async function loadConfig() {
+      try {
+        const cfg = await apiFetch('/config');
+        if (cfg.white_label_name) {
+          document.getElementById('nav-brand').textContent = cfg.white_label_name;
+          document.title = cfg.white_label_name + ' — Dashboard';
+        }
+        if (cfg.white_label_logo_url) {
+          const img = document.createElement('img');
+          img.src = cfg.white_label_logo_url;
+          img.style.cssText = 'height:28px;margin-right:0.5rem;';
+          document.getElementById('nav-brand').prepend(img);
+        }
+      } catch(e) {}
+    }
+
+    async function loadHealth() {
+      try {
+        await apiFetch('/health');
+        document.getElementById('status-dot').style.background = 'var(--accent-neon)';
+      } catch(e) {
+        document.getElementById('status-dot').style.background = 'var(--accent-pulse)';
+      }
+    }
+
+    async function loadMetrics() {
+      try {
+        const d = await apiFetch('/metrics');
+        document.getElementById('m-comments').textContent = d.comments_processed ?? 0;
+        document.getElementById('m-actions').textContent = d.actions_taken ?? 0;
+        document.getElementById('m-queued').textContent = d.queued_reviews ?? 0;
+        document.getElementById('m-posts').textContent = d.posts_processed ?? 0;
+      } catch(e) { showError('Failed to load metrics: ' + e.message); }
+    }
+
+    async function loadQueue() {
+      try {
+        const d = await apiFetch('/reviews');
+        const cases = d.pending || [];
+        const el = document.getElementById('queue-container');
+        if (!cases.length) { el.innerHTML = '<p class="empty">Queue is empty ✅</p>'; return; }
+        el.innerHTML = `<table>
+          <thead><tr><th>ID</th><th>Reason</th><th>Source</th><th>Recommended</th><th>Actions</th></tr></thead>
+          <tbody>${cases.map(c => `<tr>
+            <td>${c.case_id}</td>
+            <td>${(c.reason||'').slice(0,80)}</td>
+            <td>${c.source||''}</td>
+            <td>${badge(c.recommended_action||'review')}</td>
+            <td>
+              <button onclick="resolveCase('${c.case_id}','approved')" aria-label="Approve case ${c.case_id}">Approve</button>
+              <button class="secondary" onclick="resolveCase('${c.case_id}','rejected')" aria-label="Reject case ${c.case_id}">Reject</button>
+            </td>
+          </tr>`).join('')}</tbody>
+        </table>`;
+      } catch(e) { showError('Failed to load queue: ' + e.message); }
+    }
+
+    async function resolveCase(id, status) {
+      try {
+        await fetch(API + `/reviews/${id}/resolve`, {
+          method: 'POST',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({status})
+        });
+        loadQueue();
+        loadMetrics();
+      } catch(e) { showError('Failed to resolve case: ' + e.message); }
+    }
+
+    async function loadMemory() {
+      try {
+        const d = await apiFetch('/memory');
+        const cases = d.recent || [];
+        const el = document.getElementById('memory-container');
+        if (!cases.length) { el.innerHTML = '<p class="empty">No decisions recorded yet.</p>'; return; }
+        el.innerHTML = `<table>
+          <thead><tr><th>Action</th><th>Source</th><th>Reason</th><th>Subreddit</th><th>Time</th></tr></thead>
+          <tbody>${cases.slice(0,20).map(c => `<tr>
+            <td>${badge(c.action||'allow')}</td>
+            <td>${c.source||''}</td>
+            <td>${(c.reason||'').slice(0,60)}</td>
+            <td>${c.subreddit_name||''}</td>
+            <td>${c.created_at ? new Date(c.created_at).toLocaleString() : ''}</td>
+          </tr>`).join('')}</tbody>
+        </table>`;
+      } catch(e) { showError('Failed to load memory: ' + e.message); }
+    }
+
+    async function loadModmail() {
+      try {
+        const d = await apiFetch('/modmail');
+        const items = d.modmail || [];
+        const el = document.getElementById('modmail-container');
+        if (!items.length) { el.innerHTML = '<p class="empty">No open modmail.</p>'; return; }
+        el.innerHTML = `<table>
+          <thead><tr><th>Subject</th><th>Category</th><th>Status</th><th>SLA</th></tr></thead>
+          <tbody>${items.map(m => `<tr>
+            <td>${(m.subject||'').slice(0,60)}</td>
+            <td>${badge(m.category||'unknown')}</td>
+            <td>${badge(m.status||'open')}</td>
+            <td>${m.sla_deadline ? new Date(m.sla_deadline).toLocaleString() : '—'}</td>
+          </tr>`).join('')}</tbody>
+        </table>`;
+      } catch(e) { document.getElementById('modmail-container').innerHTML = '<p class="empty">Modmail requires Starter tier or above.</p>'; }
+    }
+
+    async function loadScheduled() {
+      try {
+        const d = await apiFetch('/scheduled-posts');
+        const el = document.getElementById('scheduled-container');
+        const allPosts = Object.values(d).flat();
+        if (!allPosts.length) { el.innerHTML = '<p class="empty">No scheduled posts.</p>'; return; }
+        el.innerHTML = `<table>
+          <thead><tr><th>Subreddit</th><th>Title</th><th>Scheduled For</th><th>Status</th></tr></thead>
+          <tbody>${allPosts.map(p => `<tr>
+            <td>r/${p.subreddit_name}</td>
+            <td>${(p.title||'').slice(0,60)}</td>
+            <td>${p.post_at ? new Date(p.post_at).toLocaleString() : '—'}</td>
+            <td>${badge(p.status||'scheduled')}</td>
+          </tr>`).join('')}</tbody>
+        </table>`;
+      } catch(e) { document.getElementById('scheduled-container').innerHTML = '<p class="empty">Content calendar requires Pro tier or above.</p>'; }
+    }
+
+    async function loadBilling() {
+      try {
+        const d = await apiFetch('/billing/subscription');
+        const el = document.getElementById('billing-container');
+        el.innerHTML = `<div class="card" style="max-width:400px">
+          <div class="card-label">Current Tier</div>
+          <div class="card-value" style="font-size:1.5rem;text-transform:capitalize">${d.tier||'free'}</div>
+          <p style="margin-top:0.75rem;color:var(--text-secondary);font-size:0.875rem">
+            Subreddits: ${(d.managed_subreddits||[]).length} managed<br>
+            AI calls today: ${d.ai_calls_today||0}
+          </p>
+          <button style="margin-top:1rem" onclick="openPortal()" aria-label="Manage subscription">Manage Subscription</button>
+        </div>`;
+      } catch(e) { document.getElementById('billing-container').innerHTML = '<p class="empty">Billing info unavailable.</p>'; }
+    }
+
+    async function openPortal() {
+      try {
+        const d = await fetch(API + '/billing/portal', {method:'POST'}).then(r=>r.json());
+        if (d.url) window.open(d.url, '_blank');
+      } catch(e) { showError('Could not open billing portal: ' + e.message); }
+    }
+
+    async function init() {
+      await loadConfig();
+      await loadHealth();
+      await Promise.all([loadMetrics(), loadQueue(), loadMemory(), loadModmail(), loadScheduled(), loadBilling()]);
+    }
+
+    init();
+    setInterval(() => { loadMetrics(); loadHealth(); }, 30000);
+    setInterval(loadQueue, 60000);
+  </script>
+</body>
+</html>
